@@ -1,0 +1,15 @@
+{
+  "name": "webauthntest",
+  "version": "1.0.0",
+  "description": "A small test implementing WebAuthn",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Firas A.",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.7"
+  }
+}
