@@ -1,71 +1,67 @@
-    const express = require('express');
-    const crypto = require('crypto');
-    const db = require('./database'); 
+const express = require('express');
+const crypto = require('crypto');
+const db = require('./database'); // Assuming you have a database.js file
+const app = express();
+const port = 3000;
 
-    const app = express();
-    const port = 3000;
+app.use(express.json());
+app.use(express.static('public'));
 
-    app.use(express.json()); // for parsing application/json
-    app.use(express.static('public')); // serve static files from 'public' directory
+function generateChallenge() {
+    return crypto.randomBytes(32).toString('base64');
+}
 
-    // Function to generate a random challenge
-    function generateChallenge() {
-        return crypto.randomBytes(32).toString('base64');
+app.post('/start-register', (req, res) => {
+    const username = req.body.username;
+    const challenge = generateChallenge();
+    const userAccountId = crypto.randomBytes(64);
+    res.json({
+        challenge: Buffer.from(challenge, 'base64'),
+        rp: { 
+            name: "FISS CORP", 
+            id: "localhost" 
+        },
+        user: {
+            id: userAccountId,
+            name: username,
+            displayName: username
+        },
+        pubKeyCredParams: [
+            { type: "public-key", alg: -7 },
+            { type: "public-key", alg: -257 }
+            ],
+        authenticatorSelection: {
+            userVerification: "preferred"
+            },
+            
+        timeout: 60000
+    });
+});    
+
+app.post('/send-credential', (req, res) => {
+    const username = req.body.username;
+    const credential = req.body.credential;
+    
+    if (!username || !credential) {
+        return res.status(400).send('Username and credential are required');
     }
 
-    app.post('/register', (req, res) => {
-        const email = req.body.email;
-        const userId = req.body.userId;
+    console.log('Credential Info Server: ', credential);
 
-        if (!email || !userId) {
-            return res.status(400).send('Email and user ID are required');
-        }
+    // TODO: process and store public key, credential ID, and user ID, possbly sign count and attestation info.
+    //Need to process ClientDataJSON and AttestationObject. 
+    //AttestationObject is a CBOR encoded object containing the attestation statement and authenticator data.
 
-        // Generate challenge
-        const challenge = generateChallenge();
+    res.json({ status: 'Registration successful' });
+});    
 
-        const user = { id: userId, email: email, challenge: challenge };
-
-        // Save user info in SQLite database
-        db.addUser(userId, email, "publicKeyPlaceholder", (err) => {
-            if (err) {
-                console.error(err.message);
-                return res.status(500).send('Error saving user data');
-            }
-
-            // Send registration data to client
-            res.json({
-                challenge: Buffer.from(challenge, 'base64'),
-                rp: {
-                    name: "FISS CORP",
-                    id: "localhost"
-                },
-                user: {
-                    id: Buffer.from(userId).toString('base64'),
-                    name: email,
-                    displayName: userId  
-                },
-                pubKeyCredParams: [
-                    { type: "public-key", alg: -7 },   // ES256
-                    { type: "public-key", alg: -257 }  // RS256
-                ],
-                attestation: 'direct',
-                timeout: 60000
-            });
-
-            console.log("Registration Request Received");
-            console.log("Email:", email);
-            console.log("User ID:", userId);
-            console.log("Generated Challenge:", challenge);
-        });
-    });
 
 
     app.post('/login', (req, res) => {
         const username = req.body.username;
         const user = users[username];
 
-        if (!user) {
+        if (!user) {x   
             return res.status(400).send('User not found');
         }
 
@@ -84,7 +80,6 @@
             timeout: 60000
         });
     });
-
 
 
     app.listen(port, () => {

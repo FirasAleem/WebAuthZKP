@@ -14,8 +14,7 @@ const createUsersTable = () => {
     const query = `
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            userId TEXT NOT NULL,
-            email TEXT NOT NULL,
+            username TEXT NOT NULL,
             publicKey TEXT NOT NULL
         )
     `;
@@ -27,24 +26,18 @@ const createUsersTable = () => {
 createUsersTable();
 
 // Function to add a new user
-const addUser = (userId, email, publicKey, callback) => {
-    const query = `INSERT INTO users (userId, email, publicKey) VALUES (?, ?, ?)`;
-    db.run(query, [userId, email, publicKey], callback);
+const addUser = (username, publicKey, callback) => {
+    const query = `INSERT INTO users (username, publicKey) VALUES (?, ?, ?)`;
+    db.run(query, [username, email, publicKey], callback);
 };
 
-// Function to retrieve a user by email
-const getUserByEmail = (email, callback) => {
-    const query = `SELECT * FROM users WHERE email = ?`;
-    db.get(query, [email], callback);
-};
-
-
+// Function to retrieve a user by ID
 const getUserById = (id, callback) => {
-    const query = `SELECT * FROM users WHERE userId = ?`;
+    const query = `SELECT * FROM users WHERE username = ?`;
     db.get(query, [email], callback);
 };
 
 module.exports = {
     addUser,
-    getUserByEmail
+    getUserById
 };
