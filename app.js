@@ -18,6 +18,9 @@ app.use(session({
     secret: 'MySuperSecretSuperUnsecureKey!', //TODO: store this in a env file
     resave: false,
     saveUninitialized: true,
+    cookie: {
+        maxAge: 300000 // Session expiration time in milliseconds (e.g., 3600000 for 1 hour)
+    }
 }));
 
 
@@ -40,9 +43,9 @@ app.post('/start-register', (req, res) => {
     const userAccountId = crypto.randomBytes(64);
     res.json({
         challenge: challenge,
-        rp: { 
-            name: "FISS CORP", 
-            id: rpid 
+        rp: {
+            name: "FISS CORP",
+            id: rpid
         },
         user: {
             id: userAccountId,
@@ -52,15 +55,15 @@ app.post('/start-register', (req, res) => {
         pubKeyCredParams: [
             { type: "public-key", alg: -7 },
             { type: "public-key", alg: -257 }
-            ],
+        ],
         authenticatorSelection: {
             userVerification: "required",
-            },
+        },
         attestation: 'direct',
         userVerification: 'required',
-        timeout: 60000
+        timeout: 300000
     });
-});    
+});
 
 
 
@@ -70,7 +73,7 @@ app.post('/send-credential', async (req, res) => {
 
     const credential = req.body.credential;
     console.log('Credential on Server: ', credential);
-    
+
     const unsafeChallenge = req.session.challenge; //this is the URL unsafe version so will  not quite be the same as the one the client sends
     const challenge = unsafeChallenge.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');  //convert to URL safe version
 
@@ -83,17 +86,17 @@ app.post('/send-credential', async (req, res) => {
 
     // Verify the challenge matches
     if (clientDataJSON.challenge !== challenge) {
-        console.log('Error: Type is not webauthn.create');
+        console.error('Error: Type is not webauthn.create');
         return res.status(402).send('Challenge does not match');
     }
     //Verify the origin matches
     if (clientDataJSON.origin !== 'http://localhost:3000') { //change if hosting on website/different port
-        console.log('Error: origin does not match');
+        console.error('Error: origin does not match');
         return res.status(403).send('Origin does not match');
     }
     // Verify the type of credential
     if (clientDataJSON.type !== 'webauthn.create') {
-        console.log('Error: Type is not webauthn.create');
+        console.error('Error: Type is not webauthn.create');
         return res.status(404).send('Type is not webauthn.create');
     }
     //Decode attestation object from the credential
@@ -106,9 +109,9 @@ app.post('/send-credential', async (req, res) => {
     const rpIdHash = authenticatorData.slice(0, 32);
 
     // Validate RP ID Hash
-    const expectedRpIdHash = crypto.createHash('sha256').update(rpid).digest(); 
+    const expectedRpIdHash = crypto.createHash('sha256').update(rpid).digest();
     if (!crypto.timingSafeEqual(Buffer.from(rpIdHash), expectedRpIdHash)) {
-        console.log('Error: RP ID Hash does not match');
+        console.error('Error: RP ID Hash does not match');
         return res.status(400).send('RP ID Hash does not match');
     }
 
@@ -127,31 +130,31 @@ app.post('/send-credential', async (req, res) => {
 
     // Extract signCount (4 bytes at position 33)
     const signCountBytes = authenticatorData.slice(33, 37);
-    const signCount = 
+    const signCount =
         (signCountBytes[0] << 24) | // Shift the first byte 24 bits to the left
         (signCountBytes[1] << 16) | // Shift the second byte 16 bits to the left
         (signCountBytes[2] << 8) |  // Shift the third byte 8 bits to the left
         signCountBytes[3];          // Fourth byte as is
-    
+
     console.log('Sign Count: ', signCount);
-    
+
     // Extract Attested Credential Data (remaining bytes)
     const aaguidBytes = authenticatorData.slice(37, 53);
     const aaguidHex = Array.from(aaguidBytes)
         .map(byte => byte.toString(16).padStart(2, '0')) // Convert each byte to a two-character hex string
         .join('');
-    
+
     // Insert hyphens to format as UUID
-    const formattedAAGUID = 
+    const formattedAAGUID =
         `${aaguidHex.substring(0, 8)}-${aaguidHex.substring(8, 12)}-${aaguidHex.substring(12, 16)}-${aaguidHex.substring(16, 20)}-${aaguidHex.substring(20)}`;
-    
+
     console.log('Formatted AAGUID: ', formattedAAGUID);
-        
+
     const credentialIdLengthBytes = authenticatorData.slice(53, 55); //2 bytes at position 53
-    const credentialIdLength = 
+    const credentialIdLength =
         (credentialIdLengthBytes[0] << 8) | // Shift the first byte 8 bits to the left
         credentialIdLengthBytes[1];         // Second byte as is
-    
+
     console.log('Credential ID Length: ', credentialIdLength);
     const credentialId = authenticatorData.slice(55, 55 + credentialIdLength);
     // Convert credentialId to base64 string
@@ -172,13 +175,46 @@ app.post('/send-credential', async (req, res) => {
     // Access the 'attStmt' (Attestation Statement)
     const attestationStatement = attestationObject.attStmt;
     console.log('Attestation Statement Algorithm: ', attestationStatement.alg);
-    console.log('Attestation Statement Signature: ', Buffer.from(attestationStatement.sig).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''));
-    
-    // TODO: process and store public key, credential ID, and user ID, possbly sign count and attestation info.
+    if (attestationStatement.sig) {
+        console.log('Attestation Statement Signature: ', Buffer.from(attestationStatement.sig).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''));
+    }
+    //Store the credential in the database
+    // Check if user exists
+    db.getUserByUsername(username, (err, user) => {
+        if (err) {
+            console.error('Database error:', err);
+            return res.status(500).send('Internal server error');
+        }
 
+        if (!user) {
+            // User does not exist, create a new user
+            db.addUser(username, (err, userId) => {
+                if (err) {
+                    console.error('Error adding user:', err);
+                    return res.status(500).send('Failed to create user');
+                }
+                saveAuthenticator(userId);
+            });
+        } else {
+            // User exists, save the authenticator data
+            saveAuthenticator(user.id);
+        }
+    });
 
+    function saveAuthenticator(userId) {
+        // Convert credentialId and publicKey to base64URL
+        const credentialIdBase64Url = credentialIdBase64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+        const publicKeyBase64Url = credentialPublicKeyBase64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+
+        db.addAuthenticator(userId, credentialIdBase64Url, publicKeyBase64Url, signCount, formattedAAGUID, (err) => {
+            if (err) {
+                console.error('Error adding authenticator:', err);
+                return res.status(500).send('Failed to register authenticator');
+            }
+        });
+    }
     res.json({ status: 'Registration successful' });
-});  
+});
 
 function parseCOSEPublicKey(coseBuffer) {
     // Parse the COSE key with a CBOR library
@@ -200,35 +236,31 @@ function parseCOSEPublicKey(coseBuffer) {
     };
 }
 
+app.post('/login', (req, res) => {
+    const username = req.body.username;
+    const user = users[username];
 
+    if (!user) {
+        return res.status(400).send('User not found');
+    }
 
+    // Generate new challenge for login
+    const challenge = generateChallenge();
+    user.challenge = challenge;
 
-
-    app.post('/login', (req, res) => {
-        const username = req.body.username;
-        const user = users[username];
-
-        if (!user) {   
-            return res.status(400).send('User not found');
-        }
-
-        // Generate new challenge for login
-        const challenge = generateChallenge();
-        user.challenge = challenge;
-
-        // Send challenge to client
-        res.json({
-            challenge: challenge,
-            allowCredentials: [{
-                type: 'public-key',
-                id: user.credentialId, // should be stored during registration
-                transports: ['usb', 'nfc', 'ble', 'internal']
-            }],
-            timeout: 60000
-        });
+    // Send challenge to client
+    res.json({
+        challenge: challenge,
+        allowCredentials: [{
+            type: 'public-key',
+            id: user.credentialId, // should be stored during registration
+            transports: ['usb', 'nfc', 'ble', 'internal']
+        }],
+        timeout: 60000
     });
+});
 
 
-    app.listen(port, () => {
-        console.log(`Server running at http://localhost:${port}/`);
-    });
+app.listen(port, () => {
+    console.log(`Server running at http://localhost:${port}/`);
+});

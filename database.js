@@ -43,7 +43,7 @@ createAuthenticatorsTable();
 // Function to add a new user
 const addUser = (username, callback) => {
     const query = `INSERT INTO users (username) VALUES (?)`;
-    db.run(query, [username], function(err) {
+    db.run(query, [username], function (err) {
         callback(err, this.lastID); // Return the last inserted row id
     });
 };
