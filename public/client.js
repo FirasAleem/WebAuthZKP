@@ -23,9 +23,11 @@ document.getElementById('register').addEventListener('click', async () => {
         }
 
         const options = await response.json();
+        const challenge = Uint8Array.from(atob(options.challenge), c => c.charCodeAt(0));
+        console.log('Challenge in Client: ', challenge);
 
         const createCredentialOptions = {
-            challenge: new Uint8Array(options.challenge),
+            challenge: challenge,
             rp: options.rp,
             user: {
                 id: new Uint8Array(options.user.id.userAccountId),
@@ -34,31 +36,22 @@ document.getElementById('register').addEventListener('click', async () => {
             },
             pubKeyCredParams: options.pubKeyCredParams,
             timeout: options.timeout,
-            authenticatorSelection: options.authenticatorSelection
+            authenticatorSelection: options.authenticatorSelection,
+            attestation: options.attestation,
+            userVerification: options.userVerification
         };
+        console.log('Create Credential Options Challenge: ', createCredentialOptions.challenge);
 
         const newCredentialInfo = await navigator.credentials.create({ publicKey: createCredentialOptions });
+        console.log('New Credential Info: ', newCredentialInfo);        
+
+        const JSONarrayBuffer = newCredentialInfo.response.clientDataJSON;
+        const decoder = new TextDecoder('utf-8');
+        const decoded = decoder.decode(JSONarrayBuffer);
+        console.log('Client JSON: ', JSON.parse(decoded));
         const processedCredential = processCredentialInfo(newCredentialInfo);
         console.log('Processed Credential Client: ', processedCredential);
     
-        // // Decodes ArrayBuffers
-        // const decoder = new TextDecoder('utf-8');
-        // var decodedString = decoder.decode(newCredentialInfo.response.clientDataJSON);
-        // console.log('Client JSON 1: ', decodedString);
-
-        // const attestationObject = newCredentialInfo.response.attestationObject;
-
-        // // Access client JSON
-        // const clientJSON = newCredentialInfo.response.clientDataJSON;
-        // decodedString = decoder.decode(clientJSON);
-        // console.log('Client JSON 2: ', decodedString);
-
-        // // Return authenticator data ArrayBuffer
-        // const authenticatorData = new Uint8Array(newCredentialInfo.response.authenticatorData);
-        // const parsedAuthData = parseAuthenticatorData(authenticatorData.buffer);
-        // console.log(parsedAuthData);
-        // parseAndPrintRpIdHash(authenticatorData.buffer);
-        // }});
         const regResponse = await fetch('/send-credential', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -108,40 +101,40 @@ function arrayBufferToBase64(buffer) {
     return window.btoa(binary);
 }
 
-function parseAuthenticatorData(buffer) {
-    const dataView = new DataView(buffer);
+// function parseAuthenticatorData(buffer) {
+//     const dataView = new DataView(buffer);
 
-    // RP ID Hash is the first 32 bytes
-    const rpIdHash = buffer.slice(0, 32);
+//     // RP ID Hash is the first 32 bytes
+//     const rpIdHash = buffer.slice(0, 32);
 
-    // Flags is the next byte
-    const flags = dataView.getUint8(32);
-    const userPresent = (flags & 0x01) === 0x01;
-    const userVerified = (flags & 0x04) === 0x04;
+//     // Flags is the next byte
+//     const flags = dataView.getUint8(32);
+//     const userPresent = (flags & 0x01) === 0x01;
+//     const userVerified = (flags & 0x04) === 0x04;
 
-    // Signature counter is the next 4 bytes
-    const signCount = dataView.getUint32(33, false); // Big-endian
+//     // Signature counter is the next 4 bytes
+//     const signCount = dataView.getUint32(33, false); // Big-endian
 
-    return {
-        rpIdHash,
-        userPresent,
-        userVerified,
-        signCount
-    };
-}
+//     return {
+//         rpIdHash,
+//         userPresent,
+//         userVerified,
+//         signCount
+//     };
+// }
 
-function parseAndPrintRpIdHash(authenticatorData) {
-    const dataView = new DataView(authenticatorData);
+// function parseAndPrintRpIdHash(authenticatorData) {
+//     const dataView = new DataView(authenticatorData);
 
-    // RP ID Hash is the first 32 bytes of the Authenticator Data
-    let rpIdHashHex = '';
-    for (let i = 0; i < 32; i++) {
-        const byte = dataView.getUint8(i).toString(16).padStart(2, '0');
-        rpIdHashHex += byte;
-    }
+//     // RP ID Hash is the first 32 bytes of the Authenticator Data
+//     let rpIdHashHex = '';
+//     for (let i = 0; i < 32; i++) {
+//         const byte = dataView.getUint8(i).toString(16).padStart(2, '0');
+//         rpIdHashHex += byte;
+//     }
 
-    console.log('RP ID Hash (Hex):', rpIdHashHex);
-}
+//     console.log('RP ID Hash (Hex):', rpIdHashHex);
+// }
 
 // Handles Login
 document.getElementById('login').addEventListener('click', async () => {

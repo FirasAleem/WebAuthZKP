@@ -14,30 +14,61 @@ const createUsersTable = () => {
     const query = `
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
-            publicKey TEXT NOT NULL
-        )
+            username TEXT NOT NULL UNIQUE
+        );
     `;
-
     return db.run(query);
 };
 
-// Initialize database
-createUsersTable();
-
-// Function to add a new user
-const addUser = (username, publicKey, callback) => {
-    const query = `INSERT INTO users (username, publicKey) VALUES (?, ?, ?)`;
-    db.run(query, [username, email, publicKey], callback);
+// Create Authenticators table
+const createAuthenticatorsTable = () => {
+    const query = `
+        CREATE TABLE IF NOT EXISTS authenticators (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            credential_id TEXT NOT NULL,
+            public_key TEXT NOT NULL,
+            sign_count INTEGER NOT NULL,
+            aaguid TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+    `;
+    return db.run(query);
 };
 
-// Function to retrieve a user by ID
-const getUserById = (id, callback) => {
+// Initialize database tables
+createUsersTable();
+createAuthenticatorsTable();
+
+// Function to add a new user
+const addUser = (username, callback) => {
+    const query = `INSERT INTO users (username) VALUES (?)`;
+    db.run(query, [username], function(err) {
+        callback(err, this.lastID); // Return the last inserted row id
+    });
+};
+
+// Function to add an authenticator for a user
+const addAuthenticator = (userId, credentialId, publicKey, signCount, aaguid, callback) => {
+    const query = `INSERT INTO authenticators (user_id, credential_id, public_key, sign_count, aaguid) VALUES (?, ?, ?, ?, ?)`;
+    db.run(query, [userId, credentialId, publicKey, signCount, aaguid], callback);
+};
+
+// Function to retrieve a user by username
+const getUserByUsername = (username, callback) => {
     const query = `SELECT * FROM users WHERE username = ?`;
-    db.get(query, [email], callback);
+    db.get(query, [username], callback);
+};
+
+// Function to retrieve authenticators for a user
+const getAuthenticatorsByUserId = (userId, callback) => {
+    const query = `SELECT * FROM authenticators WHERE user_id = ?`;
+    db.all(query, [userId], callback);
 };
 
 module.exports = {
     addUser,
-    getUserById
+    getUserByUsername,
+    addAuthenticator,
+    getAuthenticatorsByUserId
 };
