@@ -56,7 +56,7 @@ const addAuthenticator = (userId, credentialId, publicKey, signCount, aaguid, ca
 
 // Function to retrieve a user by username
 const getUserByUsername = (username, callback) => {
-    const query = `SELECT * FROM users WHERE username = ?`;
+    const query = `SELECT id, username FROM users WHERE username = ?`;
     db.get(query, [username], callback);
 };
 
@@ -66,9 +66,24 @@ const getAuthenticatorsByUserId = (userId, callback) => {
     db.all(query, [userId], callback);
 };
 
+// Function to retrieve an authenticator by credential ID
+const getAuthenticatorByCredentialId = (credentialId, callback) => {
+    const query = `SELECT * FROM authenticators WHERE credential_id = ?`;
+    db.get(query, [credentialId], callback);
+};
+
+const updateSignCount = (authenticatorId, newSignCount, callback) => {
+    const query = `UPDATE authenticators SET sign_count = ? WHERE id = ?`;
+    db.run(query, [newSignCount, authenticatorId], callback);
+};
+
+
+
 module.exports = {
     addUser,
     getUserByUsername,
     addAuthenticator,
-    getAuthenticatorsByUserId
+    getAuthenticatorsByUserId,
+    getAuthenticatorByCredentialId,
+    updateSignCount
 };

@@ -101,33 +101,91 @@ function arrayBufferToBase64(buffer) {
     return window.btoa(binary);
 }
 
+function base64URLtoBase64(input) {
+    // Replace Base64URL specific characters with Base64 equivalent
+    let base64String = input.replace(/-/g, '+').replace(/_/g, '/');
+    // Pad with '=' characters to make the length a multiple of 4 if necessary
+    while (base64String.length % 4) {
+        base64String += '=';
+    }
+    return base64String;
+}
+
 // Handles Login
 document.getElementById('login').addEventListener('click', async () => {
+    const username = document.getElementById('username').value;
+
+    if (!window.PublicKeyCredential) {
+        alert("WebAuthn not supported on this browser.");
+        return;
+    }
+
+    if (!username) {
+        alert('User ID is required');
+        return;
+    }
+
     try {
         const response = await fetch('/login', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ username: 'user@example.com' })
+            body: JSON.stringify({ username })
         });
+        if (response.status === 400) {
+            const errorText = await response.text(); // Or response.json() if your server sends JSON
+            if (errorText.includes('User not found')) {
+                alert('User not found. Please register first.');
+                return;
+            }
+        }
+        if (!response.ok) {
+            throw new Error(`Server responded with status: ${response.status}`);
+        }
         const data = await response.json();
+        console.log('Login data:', data);
+        console.log('Login data array:', data.allowCredentials);
 
-        const publicKey = {
-            ...data,
-            challenge: Uint8Array.from(atob(data.challenge), c => c.charCodeAt(0)),
-            allowCredentials: data.allowCredentials.map(cred => ({
-                ...cred,
-                id: Uint8Array.from(atob(cred.id), c => c.charCodeAt(0))
-            }))
+        const assertionOptions = {
+            publicKey: {
+                challenge: Uint8Array.from(atob(data.challenge), c => c.charCodeAt(0)),
+                allowCredentials: data.allowCredentials.map(cred => ({
+                    ...cred,
+                    id: Uint8Array.from(atob(base64URLtoBase64(cred.id)), c => c.charCodeAt(0))
+                })),
+                timeout: data.timeout
+            }
         };
 
-        const assertion = await navigator.credentials.get({ publicKey });
+        const assertion = await navigator.credentials.get(assertionOptions);
         console.log('Login assertion:', assertion);
 
-        // Send assertion to server for verification
-        // You need to convert ArrayBuffer objects to base64 strings
-        // This is just an example, adapt as needed
+        const loginData = {
+            id: assertion.id,
+            rawId: arrayBufferToBase64(assertion.rawId),
+            type: assertion.type,
+            response: {
+                authenticatorData: arrayBufferToBase64(assertion.response.authenticatorData),
+                clientDataJSON: arrayBufferToBase64(assertion.response.clientDataJSON),
+                signature: arrayBufferToBase64(assertion.response.signature),
+                userHandle: arrayBufferToBase64(assertion.response.userHandle)
+            }
+        };
+        console.log('Login data:', loginData);
+
+        const regResponse = await fetch('/verify-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(loginData)
+        });
+        if (!regResponse.ok) {
+            throw new Error(`Server responded with status: ${regResponse.status}`);
+        }
+
+        const regResult = await regResponse.json();
+        console.log('Authentication result:', regResult);
+
     } catch (err) {
         console.error('Login error:', err);
     }

@@ -4,15 +4,15 @@ const db = require('./database');
 const session = require('express-session');
 const cbor = require('cbor');
 
-
-
 const app = express();
 const port = 3000;
-const rpid = 'localhost'; //TODO: change this to the domain name of the website
+const rpid = 'localhost'; //change this to the domain name of the website if deployed
+const url = `http://localhost:${port}`; //change this to the domain name of the website if deployed
 
 app.use(express.json());
 app.use(express.static('public'));
 
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 app.use(session({
     secret: 'MySuperSecretSuperUnsecureKey!', //TODO: store this in a env file
@@ -90,7 +90,7 @@ app.post('/send-credential', async (req, res) => {
         return res.status(402).send('Challenge does not match');
     }
     //Verify the origin matches
-    if (clientDataJSON.origin !== 'http://localhost:3000') { //change if hosting on website/different port
+    if (clientDataJSON.origin !== url) { //change if hosting on website/different port
         console.error('Error: origin does not match');
         return res.status(403).send('Origin does not match');
     }
@@ -116,17 +116,24 @@ app.post('/send-credential', async (req, res) => {
     }
 
     // Extract Flags (1 byte at position 32)
-    //const flags = dataView.getUint8(32);
     const flagsByte = authenticatorData.slice(32, 33);
     const flags = flagsByte[0]; // Since slice returns an array, get the first element
     const flagsBinary = flags.toString(2).padStart(8, '0'); // Convert to binary and pad with zeros to ensure 8 bits
+
     console.log('Flags byte in binary: ', flagsBinary);
     const userPresent = (flags & 0x01) === 0x01; // Bit 0 is UP flag
     const userVerified = (flags & 0x04) === 0x04; // Bit 2 is UV flag
+    const backupEligible = (flags & 0x08) === 0x08; // Bit 3 is BE flag
+    const backupStatus = (flags & 0x10) === 0x10; // Bit 4 is BS flag
     const atFlag = (flags & 0x40) === 0x40; // Bit 6 is AT flag
-    console.log('User Present flag set: ', userPresent);
-    console.log('User Verified flag set: ', userVerified);
-    console.log('AT Flag set: ', atFlag);
+    const extensionData = (flags & 0x80) === 0x80; // Bit 7 is ED flag
+
+    console.log('User Present: ', userPresent);
+    console.log('User Verified: ', userVerified);
+    console.log('Backup Eligible: ', backupEligible);
+    console.log('Backup Status: ', backupStatus);
+    console.log('AT: ', atFlag);
+    console.log('Extension Data: ', extensionData);
 
     // Extract signCount (4 bytes at position 33)
     const signCountBytes = authenticatorData.slice(33, 37);
@@ -236,31 +243,202 @@ function parseCOSEPublicKey(coseBuffer) {
     };
 }
 
-app.post('/login', (req, res) => {
+app.post('/login', async (req, res) => {
     const username = req.body.username;
-    const user = users[username];
+    req.session.username = username;
 
-    if (!user) {
-        return res.status(400).send('User not found');
+    try {
+        // Retrieve user data
+        db.getUserByUsername(username, (err, user) => {
+            if (err || !user) {
+                console.error('User not found or database error:', err);
+                return res.status(400).send('User not found');
+            }
+
+            // Generate new challenge for login
+            const challenge = generateChallenge();
+            req.session.challenge = challenge;
+
+            // Retrieve authenticators for the user
+            db.getAuthenticatorsByUserId(user.id, (authErr, authenticators) => {
+                if (authErr) {
+                    console.error('Error retrieving authenticators:', authErr);
+                    return res.status(500).send('Internal server error');
+                }
+
+                if (!authenticators || authenticators.length === 0) {
+                    return res.status(404).send('No registered authenticators found for user');
+                }
+                console.log('Authenticators: ', authenticators);
+                const response = {
+                    challenge: challenge,
+                    allowCredentials: authenticators.map(auth => ({
+                        type: 'public-key',
+                        id: (auth.credential_id), // Ensure this is Base64 URL-encoded
+                        transports: ['usb', 'nfc', 'ble', 'internal']
+                    })),
+                    timeout: 60000
+                }
+                // Send challenge and allowCredentials to client
+                res.json(response);
+            });
+
+        });
+    } catch (error) {
+        console.error('Database error:', error);
+        res.status(500).send('Internal server error');
+    }
+});
+
+app.post('/verify-login', async (req, res) => {
+    const { id, rawId, type, response } = req.body;
+    const credentialId = id;
+    const unsafeChallenge = req.session.challenge; //this is the URL unsafe version so will  not quite be the same as the one the client sends
+    const challenge = unsafeChallenge.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');  //convert to URL safe version
+    console.log("Request: ", req.body)
+
+    try {
+        console.log('Credential ID: ', credentialId);
+        db.getAuthenticatorByCredentialId(credentialId, (err, authenticator) => {
+            if (err) {
+                console.error('Database error:', err);
+                return res.status(500).send('Internal server error');
+            }
+            if (!authenticator) {
+                console.error('Authenticator not found');
+                return res.status(404).send('Authenticator not found');
+            }
+            console.log('Authenticator: ', authenticator);
+            console.log('Response from body: ', response);
+
+            // Decode clientDataJSON from the assertion
+            const clientDataJSON = JSON.parse(Buffer.from(response.clientDataJSON, 'base64').toString('utf8'));
+            console.log('Client Data JSON: ', clientDataJSON);
+
+            console.log('Challenge: ', challenge);
+            console.log('Client Data JSON Challenge: ', clientDataJSON.challenge);
+            // Validate the challenge
+            if (clientDataJSON.challenge !== challenge) {
+                console.error('Challenge mismatch');
+                return res.status(403).send('Challenge mismatch');
+            }
+
+            // Validate the origin
+            if (clientDataJSON.origin !== url) {
+                console.error('Origin mismatch');
+                return res.status(403).send('Origin mismatch');
+            }
+
+            console.log('Client Data JSON checks passed');
+            console.log('Authenticator Data: ', response.authenticatorData);
+
+            const authenticatorData = Buffer.from(response.authenticatorData, 'base64');
+            // Extract RP ID Hash (first 32 bytes)
+            const rpIdHash = authenticatorData.slice(0, 32);
+
+            // Validate RP ID Hash
+            const expectedRpIdHash = crypto.createHash('sha256').update(rpid).digest();
+            if (!crypto.timingSafeEqual(Buffer.from(rpIdHash), expectedRpIdHash)) {
+                console.error('Error: RP ID Hash does not match');
+                return res.status(400).send('RP ID Hash does not match');
+            }
+
+            // Extract Flags (1 byte at position 32)
+            //const flags = dataView.getUint8(32);
+            const flagsByte = authenticatorData.slice(32, 33);
+            const flags = flagsByte[0]; // Since slice returns an array, get the first element
+            const flagsBinary = flags.toString(2).padStart(8, '0'); // Convert to binary and pad with zeros to ensure 8 bits
+            console.log('Flags byte in binary: ', flagsBinary);
+            const userPresent = (flags & 0x01) === 0x01; // Bit 0 is UP flag
+            const userVerified = (flags & 0x04) === 0x04; // Bit 2 is UV flag
+            const backupEligible = (flags & 0x08) === 0x08; // Bit 3 is BE flag
+            const backupStatus = (flags & 0x10) === 0x10; // Bit 4 is BS flag
+            const atFlag = (flags & 0x40) === 0x40; // Bit 6 is AT flag
+            const extensionData = (flags & 0x80) === 0x80; // Bit 7 is ED flag
+
+            console.log('User Present: ', userPresent);
+            console.log('User Verified: ', userVerified);
+            console.log('Backup Eligible: ', backupEligible);
+            console.log('Backup Status: ', backupStatus);
+            console.log('AT: ', atFlag);
+            console.log('Extension Data: ', extensionData);
+            // Extract signCount (4 bytes at position 33)
+            const signCountBytes = authenticatorData.slice(33, 37);
+            const signCount =
+                (signCountBytes[0] << 24) | // Shift the first byte 24 bits to the left
+                (signCountBytes[1] << 16) | // Shift the second byte 16 bits to the left
+                (signCountBytes[2] << 8) |  // Shift the third byte 8 bits to the left
+                signCountBytes[3];          // Fourth byte as is
+
+            console.log('Sign Count: ', signCount);
+
+            const signature = Buffer.from(response.signature, 'base64');
+            const coseKey = cbor.decodeFirstSync(Buffer.from(authenticator.public_key, 'base64'));
+            console.log('COSE Key: ', coseKey)
+            const publicKey = coseToPem(coseKey);
+
+            const clientDataString = JSON.stringify(clientDataJSON); // Serialize it back to a string
+            const clientDataBuffer = Buffer.from(clientDataString); // Convert string to Buffer
+            const clientDataHash = crypto.createHash('SHA256').update(clientDataBuffer).digest();
+
+            const dataToBeVerified = Buffer.concat([authenticatorData, clientDataHash]);
+            const verifier = crypto.createVerify('SHA256');
+
+            verifier.update(dataToBeVerified);
+            const isValid = verifier.verify(publicKey, signature);
+            console.log('Signature is valid: ', isValid); // true if the signature is valid, false otherwise
+
+            if (signCount > authenticator.signCount) {
+                db.updateSignCount(authenticator.id, signCount, (err, authenticator) => {
+                    if (err) {
+                        console.error('Error updating sign count:', err);
+                        return res.status(500).send('Internal server error');
+                    }
+                });
+            }
+
+            res.json({ status: 'Login successful' });
+        });
+
+    } catch (error) {
+        console.error('Login verification error:', error);
+        res.status(500).send('Error verifying login');
+    }
+});
+
+function coseToPem(coseKey) {
+    // Extract key type, algorithm, x and y coordinates from COSE key
+    const kty = coseKey.get(1);
+    const alg = coseKey.get(3);
+    const crv = coseKey.get(-1);
+    const x = coseKey.get(-2);
+    const y = coseKey.get(-3);
+
+    // Ensure all necessary fields are present
+    if (kty === undefined || alg === undefined || crv === undefined || x === undefined || y === undefined) {
+        throw new Error('Missing required COSE key fields');
     }
 
-    // Generate new challenge for login
-    const challenge = generateChallenge();
-    user.challenge = challenge;
+    // Check if the key is EC2 (ECDSA)
+    if (kty !== 2) {
+        throw new Error('Unsupported key type');
+    }
 
-    // Send challenge to client
-    res.json({
-        challenge: challenge,
-        allowCredentials: [{
-            type: 'public-key',
-            id: user.credentialId, // should be stored during registration
-            transports: ['usb', 'nfc', 'ble', 'internal']
-        }],
-        timeout: 60000
+    // Construct the PEM key
+    const publicKey = crypto.createPublicKey({
+        key: {
+            kty: 'EC',
+            crv: 'P-256',
+            x: x.toString('base64'),
+            y: y.toString('base64')
+        },
+        format: 'jwk'
     });
-});
+
+    return publicKey.export({ type: 'spki', format: 'pem' });
+}
 
 
 app.listen(port, () => {
-    console.log(`Server running at http://localhost:${port}/`);
+    console.log(`Server running at ${url}`);
 });
