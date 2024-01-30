@@ -26,11 +26,13 @@ document.getElementById('register').addEventListener('click', async () => {
         const challenge = Uint8Array.from(atob(options.challenge), c => c.charCodeAt(0));
         console.log('Challenge in Client: ', challenge);
 
+        const userAccountIdBytes = Uint8Array.from(atob(options.user.id), c => c.charCodeAt(0));
+
         const createCredentialOptions = {
             challenge: challenge,
             rp: options.rp,
             user: {
-                id: new Uint8Array(options.user.id.userAccountId),
+                id: userAccountIdBytes,
                 name: username,
                 displayName: username
             },
@@ -173,6 +175,8 @@ document.getElementById('login').addEventListener('click', async () => {
             }
         };
         console.log('Login data:', loginData);
+
+        //TODO: Would we now take this login data and use it in our ZKP? yes
 
         const regResponse = await fetch('/verify-login', {
             method: 'POST',
