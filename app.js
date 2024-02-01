@@ -376,10 +376,11 @@ app.post('/verify-login', async (req, res) => {
             console.log('Public Key Pem: ', publicKey);
 
 
-            const dataToBeVerified = Buffer.concat([authenticatorData, clientDataHash])
+            const dataToBeVerified = Buffer.concat([authenticatorData, clientDataHash]);
+            const dataToBeVerifiedHash = crypto.createHash('SHA256').update(dataToBeVerified).digest('hex');
             const signatureBuffer = Buffer.from(response.signature, 'base64');
 
-            const isValid = verifyECDSASignature(dataToBeVerified, signatureBuffer, coseKeyBuffer);
+            const isValid = verifyECDSASignature(dataToBeVerifiedHash, signatureBuffer, coseKeyBuffer);
             console.log('Signature is valid:', isValid);
 
             if (signCount > authenticator.signCount) {

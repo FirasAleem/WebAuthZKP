@@ -13,20 +13,18 @@ function generateChallenge() {
 
 /*  ECDSA Signature Verification Function
     Based off of https://cryptobook.nakov.com/digital-signatures/ecdsa-sign-verify-messages#ecdsa-verify-signature
-    message is the data to be verified
+    messageHash is the data to be verified, hashed with SHA256 (to match pdf flow)
     signatureBuffer is the signature to be verified as a buffer
     publicKeyBuffer is the public key to be used for verification as a buffer in COSE format */
 
-function verifyECDSASignature(message, signatureBuffer, publicKeyBuffer) {
+function verifyECDSASignature(messageHash, signatureBuffer, publicKeyBuffer) {
     // Decode the COSE public key to a form we can use (as an elliptic curve key)
     const publicKey = parseCOSEPublicKey(publicKeyBuffer);
     console.log('publicKey: ', publicKey);
 
-    // Convert message to a Buffer if it's not already
-    message = Buffer.isBuffer(message) ? message : Buffer.from(message);
-
-    // Calculate the message hash, with the same cryptographic hash function used during the signing: h = hash(msg) and turn it into a Big Number object
-    const messageHash = new BN(crypto.createHash('SHA256').update(message).digest('hex'), 16);
+    // Take the hash and turn it into a Big Number object
+    const messageHashBN = new BN(messageHash, 16);
+    console.log('messageHashBN: ', messageHashBN);
 
     // Decode the signature into 'r' and 's' values
     const decodedSignature = decodeSignature(signatureBuffer);
@@ -39,7 +37,7 @@ function verifyECDSASignature(message, signatureBuffer, publicKeyBuffer) {
 
     // Recover the random point used during the signing: R' = (h * s1) * G + (r * s1) * pubKey
     // First calculate h * sInv[erse] mod n
-    const hTimesSInv = messageHash.mul(sInv).umod(ec.n);
+    const hTimesSInv = messageHashBN.mul(sInv).umod(ec.n);
     console.log('hTimesSInv: ', hTimesSInv);
 
     // Then calculate r * sInv[erse] mod n
