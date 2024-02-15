@@ -9,6 +9,7 @@ const {
     parseCOSEPublicKeyforOutput,
     coseToPem
 } = require('./functions');
+const wasmModule = require('./node_wasm/webauth_zkp.js');
 
 
 const app = express();
@@ -542,13 +543,10 @@ app.post('/verify-login', async (req, res) => {
 });
 
 app.post('/verify-login-zkp', async (req, res) => {
-    const { id, response } = req.body;
-    const credentialId = id;
-    const unsafeChallenge = req.session.challenge; //this is the URL unsafe version so will  not quite be the same as the one the client sends
-    const challenge = unsafeChallenge.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');  //convert to URL safe version
-    console.log("Request: ", req.body)
-    console.log('FOR ZKP PUBLIC INPUT, challenge in base64: ', challenge);
+    const { id: credentialId, signature, proof, vk, message } = req.body;
 
+    const challenge = req.session.challenge.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');  //convert to URL safe version
+    console.log("Request: ", req.body)
 
     try {
         console.log('Credential ID: ', credentialId);
@@ -562,79 +560,24 @@ app.post('/verify-login-zkp', async (req, res) => {
                 return res.status(404).send('Authenticator not found');
             }
             console.log('Authenticator: ', authenticator);
-            console.log('Response from body: ', response);
 
-            // Decode clientDataJSON from the assertion
-            const clientDataJSON = JSON.parse(Buffer.from(response.clientDataJSON, 'base64').toString('utf8'));
-            console.log('Client Data JSON: ', clientDataJSON);
+            const proofVerified = wasmModule.verify_js(message, challenge, proof, vk);
+            console.log('Proof is valid:', proofVerified);
 
-            console.log('Challenge: ', challenge);
-            console.log('Client Data JSON Challenge: ', clientDataJSON.challenge);
-            // Validate the challenge
-            if (clientDataJSON.challenge !== challenge) {
-                console.error('Challenge mismatch');
-                return res.status(403).send('Challenge mismatch');
+            // Convert base64 encoded signature to buffer for function
+            const signatureBuffer = Buffer.from(signature, 'base64');
+            // Convert base64 URL-safe encoded message to base64
+            const base64message = message.replace(/-/g, '+').replace(/_/g, '/');
+            // Convert base64 to raw binary data held in a string
+            const rawBinaryMessage = atob(base64message);
+            // Convert the raw binary message to a hexadecimal string so function to verify doesn’t have to change
+            let dataToBeVerifiedHash = '';
+            for (let i = 0; i < rawBinaryMessage.length; i++) {
+                const hex = rawBinaryMessage.charCodeAt(i).toString(16);
+                dataToBeVerifiedHash += (hex.length === 2 ? hex : '0' + hex);
             }
+            console.log("Hex string to be passed in", dataToBeVerifiedHash);
 
-            // Validate the origin
-            if (clientDataJSON.origin !== url) {
-                console.error('Origin mismatch');
-                return res.status(403).send('Origin mismatch');
-            }
-
-            console.log('Client Data JSON checks passed');
-            console.log('Authenticator Data: ', response.authenticatorData);
-
-            const authenticatorData = Buffer.from(response.authenticatorData, 'base64');
-            // Extract RP ID Hash (first 32 bytes)
-            const rpIdHash = authenticatorData.slice(0, 32);
-
-            // Validate RP ID Hash
-            const expectedRpIdHash = crypto.createHash('sha256').update(rpid).digest();
-            if (!crypto.timingSafeEqual(Buffer.from(rpIdHash), expectedRpIdHash)) {
-                console.error('Error: RP ID Hash does not match');
-                return res.status(400).send('RP ID Hash does not match');
-            }
-
-            // Extract Flags (1 byte at position 32)
-            //const flags = dataView.getUint8(32);
-            const flagsByte = authenticatorData.slice(32, 33);
-            const flags = flagsByte[0]; // Since slice returns an array, get the first element
-            const flagsBinary = flags.toString(2).padStart(8, '0'); // Convert to binary and pad with zeros to ensure 8 bits
-            console.log('Flags byte in binary: ', flagsBinary);
-            const userPresent = (flags & 0x01) === 0x01; // Bit 0 is UP flag
-            const userVerified = (flags & 0x04) === 0x04; // Bit 2 is UV flag
-            const backupEligible = (flags & 0x08) === 0x08; // Bit 3 is BE flag
-            const backupStatus = (flags & 0x10) === 0x10; // Bit 4 is BS flag
-            const atFlag = (flags & 0x40) === 0x40; // Bit 6 is AT flag
-            const extensionData = (flags & 0x80) === 0x80; // Bit 7 is ED flag
-
-            console.log('User Present: ', userPresent);
-            console.log('User Verified: ', userVerified);
-            console.log('Backup Eligible: ', backupEligible);
-            console.log('Backup Status: ', backupStatus);
-            console.log('AT: ', atFlag);
-            console.log('Extension Data: ', extensionData);
-            // Extract signCount (4 bytes at position 33)
-            const signCountBytes = authenticatorData.slice(33, 37);
-            const signCount =
-                (signCountBytes[0] << 24) | // Shift the first byte 24 bits to the left
-                (signCountBytes[1] << 16) | // Shift the second byte 16 bits to the left
-                (signCountBytes[2] << 8) |  // Shift the third byte 8 bits to the left
-                signCountBytes[3];          // Fourth byte as is
-
-            console.log('Sign Count: ', signCount);
-
-            // const signature = Buffer.from(response.signature, 'base64');
-            // const publicKey = coseToPem(coseKey);
-            // console.log('Public Key Pem: ', publicKey);
-
-            const clientDataString = JSON.stringify(clientDataJSON); // Serialize it back to a string
-            console.log('Client Data String: ', clientDataString);
-            const clientDataBuffer = Buffer.from(clientDataString); // Convert string to Buffer
-            console.log('Client Data Buffer: ', clientDataBuffer);
-            const clientDataHash = crypto.createHash('SHA256').update(clientDataBuffer).digest();
-            console.log('Client Data Hash: ', clientDataHash);
             const coseKeyBuffer = (Buffer.from(authenticator.public_key, 'base64'));
             console.log('COSE Key Buffer: ', coseKeyBuffer)
 
@@ -643,22 +586,10 @@ app.post('/verify-login-zkp', async (req, res) => {
             const publicKey = coseToPem(cbor.decodeFirstSync(coseKeyBuffer));
             console.log('Public Key Pem: ', publicKey);
 
-
-            const dataToBeVerified = Buffer.concat([authenticatorData, clientDataHash]);
-            const dataToBeVerifiedHash = crypto.createHash('SHA256').update(dataToBeVerified).digest('hex');
-            const signatureBuffer = Buffer.from(response.signature, 'base64');
-
             const isValid = verifyECDSASignature(dataToBeVerifiedHash, signatureBuffer, coseKeyBuffer);
             console.log('Signature is valid:', isValid);
 
-            if (signCount > authenticator.signCount) {
-                db.updateSignCount(authenticator.id, signCount, (err, authenticator) => {
-                    if (err) {
-                        console.error('Error updating sign count:', err);
-                        return res.status(500).send('Internal server error');
-                    }
-                });
-            } if (isValid) {
+            if (isValid && proofVerified) {
                 console.log('Login successful!');
                 res.json({ status: 'Login successful' });
             } else {

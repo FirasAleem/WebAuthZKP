@@ -78,6 +78,7 @@ fn main() {
         "Time taken to setup and prove: {:?} seconds",
         start.elapsed()
     );
+    println!("Message: {:?}", message.to_ascii_lowercase());
 
     let verify = Instant::now();
 

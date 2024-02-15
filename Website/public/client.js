@@ -1,3 +1,5 @@
+import init, { run_js } from './web_wasm/webauth_zkp.js';
+
 document.getElementById('register').addEventListener('click', async () => {
     const username = document.getElementById('username').value;
 
@@ -244,25 +246,29 @@ document.getElementById('login-zkp').addEventListener('click', async () => {
 
         const assertion = await navigator.credentials.get(assertionOptions);
         console.log('Login assertion:', assertion);
+        //Up until here, it is identical to the login function without the ZKP
+        
+        await init();
+        const clientDataJSON = JSON.parse(new TextDecoder().decode(assertion.response.clientDataJSON));
+        const challenge = clientDataJSON.challenge;
+        const startTime = performance.now();
+        const resultMap = run_js(arrayBufferToBase64(assertion.response.clientDataJSON), arrayBufferToBase64(assertion.response.authenticatorData), challenge);
+        const endTime = performance.now();
+        console.log(`Execution time: ${endTime - startTime} milliseconds`);
+
+        console.log("Result: ", resultMap);
+        const resultObject = Object.fromEntries(resultMap);
+        console.log("Result Object: ", resultObject);
+        console.log("Result Object Message: ", resultObject.message);
 
         const loginData = {
             id: assertion.id,
-            rawId: arrayBufferToBase64(assertion.rawId),
-            type: assertion.type,
-            response: {
-                authenticatorData: arrayBufferToBase64(assertion.response.authenticatorData),
-                clientDataJSON: arrayBufferToBase64(assertion.response.clientDataJSON),
-                signature: arrayBufferToBase64(assertion.response.signature),
-                userHandle: arrayBufferToBase64(assertion.response.userHandle)
-            }
+            signature: arrayBufferToBase64(assertion.response.signature),
+            proof: resultObject.proof,
+            vk: resultObject.vk,
+            message: resultObject.message
         };
         console.log('Login data in client before sending to server:', loginData);
-        console.log('FOR ZKP PRIVATE INPUT, clientDataJSON in base64: ', loginData.response.clientDataJSON);
-        console.log('FOR ZKP PRIVATE INPUT, authData in base64: ', loginData.response.authenticatorData);
-
-        //We would now run the run_js method, and send the zkp to server to verify
-        //Also need to send signature and credentialId to server
-
 
         const regResponse = await fetch('/verify-login-zkp', {
             method: 'POST',

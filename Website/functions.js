@@ -6,10 +6,10 @@ const EC = require('elliptic').ec;
 const ec = new EC('p256');
 
 // Generate a random byte array and convert it to a Base64 string to use as a challenge
+// This could in theory be some data you want to sign, but for the purposes of this demo, it's just some random bytes
 function generateChallenge() {
     return base64String = crypto.randomBytes(32).toString('base64');
 }
-
 
 /*  ECDSA Signature Verification Function
     Based off of https://cryptobook.nakov.com/digital-signatures/ecdsa-sign-verify-messages#ecdsa-verify-signature
@@ -19,15 +19,15 @@ function generateChallenge() {
     publicKeyBuffer is the public key to be used for verification as a buffer in COSE format */
 
 function verifyECDSASignature(messageHash, signatureBuffer, publicKeyBuffer) {
-    console.log('messageHash: ', messageHash);
-    console.log('signatureBuffer: ', signatureBuffer);
+    //console.log('messageHash: ', messageHash);
+    //console.log('signatureBuffer: ', signatureBuffer);
     // Decode the COSE public key to a form we can use (as an elliptic curve key)
     const publicKey = parseCOSEPublicKey(publicKeyBuffer);
-    console.log('publicKey: ', publicKey);
+    //console.log('publicKey: ', publicKey);
 
     // Take the hash and turn it into a Big Number object
     const messageHashBN = new BN(messageHash, 16);
-    console.log('messageHashBN: ', messageHashBN);
+    //console.log('messageHashBN: ', messageHashBN);
 
     // Decode the signature into 'r' and 's' values
     const decodedSignature = decodeSignature(signatureBuffer);
@@ -36,25 +36,25 @@ function verifyECDSASignature(messageHash, signatureBuffer, publicKeyBuffer) {
 
     // Calculate the modular inverse of the signature proof, s: sInv = s^-1 mod n
     const sInv = decodedSignature.s.invm(ec.n);
-    console.log('sInv: ', sInv);
+    //console.log('sInv: ', sInv);
 
     // Recover the random point used during the signing: R' = (h * s1) * G + (r * s1) * pubKey
     // First calculate h * sInv[erse] mod n
     const hTimesSInv = messageHashBN.mul(sInv).umod(ec.n);
-    console.log('hTimesSInv: ', hTimesSInv);
+    //console.log('hTimesSInv: ', hTimesSInv);
 
     // Then calculate r * sInv[erse] mod n
     const rTimesSInv = decodedSignature.r.mul(sInv).umod(ec.n);
-    console.log('rTimesSInv: ', rTimesSInv);
+    //console.log('rTimesSInv: ', rTimesSInv);
 
     // Recover the random point R' used during the signing
     // R' = (h * sInv) * G + (r * sInv) * publicKey
     const RPrime = ec.g.mul(hTimesSInv).add(publicKey.pub.mul(rTimesSInv));
-    console.log('RPrime: ', RPrime);
+    //console.log('RPrime: ', RPrime);
 
     // Take from R' its x-coordinate: r' = R'.x
     const rPrime = RPrime.getX();
-    console.log('rPrime (x-coordinate): ', rPrime);
+    //console.log('rPrime (x-coordinate): ', rPrime);
 
     // Compare r' with r
     return rPrime.eq(r);
@@ -77,7 +77,7 @@ function decodeSignature(signature) {
         );
     });
     const decodedSignature = ECDSASignature.decode(signature, 'der');
-    console.log('decodedSignature: ', decodedSignature);
+    //console.log('decodedSignature: ', decodedSignature);
     console.log('r: ', BigInt('0x' + (decodedSignature.r.toString(16))));
     console.log('s: ', BigInt('0x' + (decodedSignature.s.toString(16))));
     return decodedSignature;
