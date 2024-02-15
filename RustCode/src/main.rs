@@ -1,6 +1,6 @@
 use base64::prelude::*;
 use sha2::{Digest, Sha256};
-use std::io;
+//use std::io;
 use std::time::Instant;
 
 use crate::webauth_circuit::WebAuthZKP;
@@ -10,38 +10,38 @@ mod webauth_circuit;
 fn main() {
     println!("====== WebAuth ZKP Test Started ======");
 
-    // // Example base64 encoded values
-    // //Private Inputs
-    // let client_data_json_base64 = "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiTWdOZDVUZ1hJTm1BTDdpZzZSS2M5VDE2dExEQ0R1dnF4OVR3azkxTTNXQSIsIm9yaWdpbiI6Imh0dHA6Ly9sb2NhbGhvc3Q6MzAwMCIsImNyb3NzT3JpZ2luIjpmYWxzZX0=";
-    // let auth_data_base64 = "SZYN5YgOjGh0NBcPZHZgW4/krrmihjLHmVzzuoMdl2MFAAAAAA==";
+    // Example base64 encoded values
+    //Private Inputs
+    let client_data_json_base64 = "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiTWdOZDVUZ1hJTm1BTDdpZzZSS2M5VDE2dExEQ0R1dnF4OVR3azkxTTNXQSIsIm9yaWdpbiI6Imh0dHA6Ly9sb2NhbGhvc3Q6MzAwMCIsImNyb3NzT3JpZ2luIjpmYWxzZX0=";
+    let auth_data_base64 = "SZYN5YgOjGh0NBcPZHZgW4/krrmihjLHmVzzuoMdl2MFAAAAAA==";
 
-    // //Public Inputs
-    // let challenge_base64 = "MgNd5TgXINmAL7ig6RKc9T16tLDCDuvqx9Twk91M3WA";
+    //Public Inputs
+    let challenge_base64 = "MgNd5TgXINmAL7ig6RKc9T16tLDCDuvqx9Twk91M3WA";
 
     // Prompt for user input:
     // Prompt user for base64 encoded client data JSON
-    println!("Enter base64 encoded client data JSON:");
-    let mut client_data_json_base64 = String::new();
-    io::stdin()
-        .read_line(&mut client_data_json_base64)
-        .expect("Failed to read line");
-    let client_data_json_base64 = client_data_json_base64.trim_end().to_string(); // Trim newline character
+    // println!("Enter base64 encoded client data JSON:");
+    // let mut client_data_json_base64 = String::new();
+    // io::stdin()
+    //     .read_line(&mut client_data_json_base64)
+    //     .expect("Failed to read line");
+    // let client_data_json_base64 = client_data_json_base64.trim_end().to_string(); // Trim newline character
 
-    // Prompt user for base64 encoded auth data
-    println!("Enter base64 encoded auth data:");
-    let mut auth_data_base64 = String::new();
-    io::stdin()
-        .read_line(&mut auth_data_base64)
-        .expect("Failed to read line");
-    let auth_data_base64 = auth_data_base64.trim_end().to_string(); // Trim newline character
+    // // Prompt user for base64 encoded auth data
+    // println!("Enter base64 encoded auth data:");
+    // let mut auth_data_base64 = String::new();
+    // io::stdin()
+    //     .read_line(&mut auth_data_base64)
+    //     .expect("Failed to read line");
+    // let auth_data_base64 = auth_data_base64.trim_end().to_string(); // Trim newline character
 
-    // Prompt user for base64 encoded challenge
-    println!("Enter base64 encoded challenge:");
-    let mut challenge_base64 = String::new();
-    io::stdin()
-        .read_line(&mut challenge_base64)
-        .expect("Failed to read line");
-    let challenge_base64 = challenge_base64.trim_end().to_string(); // Trim newline character
+    // // Prompt user for base64 encoded challenge
+    // println!("Enter base64 encoded challenge:");
+    // let mut challenge_base64 = String::new();
+    // io::stdin()
+    //     .read_line(&mut challenge_base64)
+    //     .expect("Failed to read line");
+    // let challenge_base64 = challenge_base64.trim_end().to_string(); // Trim newline character
 
     let client_data_json = BASE64_STANDARD
         .decode(client_data_json_base64)

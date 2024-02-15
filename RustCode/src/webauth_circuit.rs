@@ -27,17 +27,24 @@ use web_sys::console;
 //     type_name::<T>()
 // }
 
+//Change this depending on URL of website
+static URL: &str = "http://localhost:3000";
+
+
 #[derive(Clone)]
 struct WebAuthCircuit {
     //Private inputs
     client_data_json: Option<Vec<u8>>,
     auth_data: Option<Vec<u8>>,
     client_data_challenge: Option<Vec<u8>>,
+    client_data_origin: Option<Vec<u8>>,
+    client_data_type: Option<Vec<u8>>,
 
     //Public Inputs
     message: Option<Vec<u8>>,
     challenge: Option<Vec<u8>>,
 }
+
 
 impl ConstraintSynthesizer<Fr> for WebAuthCircuit {
     fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
@@ -51,6 +58,18 @@ impl ConstraintSynthesizer<Fr> for WebAuthCircuit {
             .client_data_challenge
             .as_ref()
             .map(|client_data_challenge| UInt8::new_witness_vec(cs.clone(), client_data_challenge))
+            .unwrap_or_else(|| Err(SynthesisError::AssignmentMissing))?;
+
+        let client_data_origin_var = self
+            .client_data_origin
+            .as_ref()
+            .map(|client_data_origin| UInt8::new_witness_vec(cs.clone(), client_data_origin))
+            .unwrap_or_else(|| Err(SynthesisError::AssignmentMissing))?;
+
+        let client_data_type_var = self
+            .client_data_type
+            .as_ref()
+            .map(|client_data_type| UInt8::new_witness_vec(cs.clone(), client_data_type))
             .unwrap_or_else(|| Err(SynthesisError::AssignmentMissing))?;
 
         let auth_data_var = self
@@ -91,6 +110,20 @@ impl ConstraintSynthesizer<Fr> for WebAuthCircuit {
         // Enforce that the client_data_challenge is equal to the challenge
         client_data_challenge_var.enforce_equal(&challenge_var)?;
 
+        let target_origin_bytes = URL.as_bytes();
+        let target_origin_var: Vec<UInt8<Fr>> = target_origin_bytes.iter()
+            .map(|byte| UInt8::constant(*byte))
+            .collect();
+
+
+        client_data_origin_var.enforce_equal(&target_origin_var)?;
+
+        let target_type_bytes = "webauthn.get".as_bytes();
+        let target_type_var: Vec<UInt8<Fr>> = target_type_bytes.iter()
+            .map(|byte| UInt8::constant(*byte))
+            .collect();
+
+        client_data_type_var.enforce_equal(&target_type_var)?;
         Ok(())
     }
 }
@@ -135,12 +168,25 @@ impl WebAuthZKP {
             .decode(client_data_challenge_base64)
             .expect("Failed to decode base64 client_data_challenge");
 
-        //Could add other checking, e.g. of
+        //Other checking:
+        // Get the origin
+        let client_data_origin = parsed_json["origin"]
+            .as_str()
+            .ok_or(SynthesisError::AssignmentMissing)?;
+
+        let client_data_type = parsed_json["type"]
+            .as_str()
+            .ok_or(SynthesisError::AssignmentMissing)?;
+
+        println!("client_data_origin: {}", client_data_origin);
+        println!("client_data_type: {}", client_data_type);
 
         let circuit = WebAuthCircuit {
             client_data_json: Some(client_data_json),
             auth_data: Some(auth_data),
             client_data_challenge: Some(client_data_challenge),
+            client_data_origin: Some(client_data_origin.as_bytes().to_vec()),
+            client_data_type: Some(client_data_type.as_bytes().to_vec()),
             message: Some(message.clone()),
             challenge: Some(challenge.clone()),
         };

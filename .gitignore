@@ -1,2 +1,4 @@
 /Website/node_modules/
 RustCode/target
+RustCode/node_wasm
+RustCode/web_wasm

@@ -26,7 +26,7 @@ features = ["js"]
 
 [dependencies.web-sys]
 version = "0.3.68"
-features = [ "console" ] 
+features = [ "console" ]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

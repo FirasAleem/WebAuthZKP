@@ -1,0 +1,11 @@
+{
+  "name": "webauth-zkp",
+  "version": "0.1.0",
+  "files": [
+    "webauth_zkp_bg.wasm",
+    "webauth_zkp.js",
+    "webauth_zkp.d.ts"
+  ],
+  "main": "webauth_zkp.js",
+  "types": "webauth_zkp.d.ts"
+}
