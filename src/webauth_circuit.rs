@@ -9,8 +9,23 @@ use ark_relations::r1cs::{
 };
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_snark::{CircuitSpecificSetupSNARK, SNARK};
+use base64::prelude::*;
 use rand::thread_rng;
+use serde_json::{json, Value};
+use serde_wasm_bindgen::to_value;
+use sha2::{Digest, Sha256};
+use std::str;
+use wasm_bindgen::prelude::*;
+use web_sys::console;
 
+//use ark_r1cs_std::fields::fp::FpVar;
+
+// use std::any::type_name;
+
+// // Helper function for getting the type name
+// fn type_of<T>(_: &T) -> &'static str {
+//     type_name::<T>()
+// }
 
 #[derive(Clone)]
 struct WebAuthCircuit {
@@ -76,7 +91,6 @@ impl ConstraintSynthesizer<Fr> for WebAuthCircuit {
         // Enforce that the client_data_challenge is equal to the challenge
         client_data_challenge_var.enforce_equal(&challenge_var)?;
 
-
         Ok(())
     }
 }
@@ -88,7 +102,6 @@ impl WebAuthZKP {
         //Private inputs
         client_data_json: Vec<u8>,
         auth_data: Vec<u8>,
-        client_data_challenge: Vec<u8>,
 
         //Public Inputs
         message: Vec<u8>,
@@ -103,6 +116,26 @@ impl WebAuthZKP {
         SynthesisError,
     > {
         let rng = &mut thread_rng();
+        //Get the challenge from the client_data_json
+        // Step 1: Decode client_data_json from bytes to a string
+        let client_data_json_str =
+            str::from_utf8(&client_data_json).map_err(|_| SynthesisError::AssignmentMissing)?;
+
+        // Step 2: Parse the JSON string to access the 'challenge' field
+        let parsed_json: Value = serde_json::from_str(client_data_json_str)
+            .map_err(|_| SynthesisError::AssignmentMissing)?;
+
+        // Step 3: Get the challenge as base64
+        let client_data_challenge_base64 = parsed_json["challenge"]
+            .as_str()
+            .ok_or(SynthesisError::AssignmentMissing)?;
+
+        // Step 4: Decode the challenge from base64 to bytes
+        let client_data_challenge = BASE64_URL_SAFE_NO_PAD
+            .decode(client_data_challenge_base64)
+            .expect("Failed to decode base64 client_data_challenge");
+
+        //Could add other checking, e.g. of
 
         let circuit = WebAuthCircuit {
             client_data_json: Some(client_data_json),
@@ -138,13 +171,7 @@ impl WebAuthZKP {
         let mut serialized_vk: Vec<u8> = Vec::new();
         vk.serialize_compressed(&mut serialized_vk).unwrap();
 
-
-        Ok((
-            message,
-            challenge,
-            serialized_proof,
-            serialized_vk,
-        ))    
+        Ok((message, challenge, serialized_proof, serialized_vk))
     }
 
     pub fn verify(
@@ -170,16 +197,102 @@ impl WebAuthZKP {
         //Add the message to the public inputs vector
         public_inputs.extend(message_fe);
         println!(
-            "Number of elements in public_inputs after hash: {}",
+            "Number of elements in public_inputs after message: {}",
             public_inputs.len()
         );
         //Add the challenge to the public inputs vector
         public_inputs.extend(challenge_fe);
         println!(
-            "Number of elements in public_inputs before passing: {}",
+            "Number of elements in public_inputs before passing to verify: {}",
             public_inputs.len()
         );
         //Do the verification
         Groth16::<Bls12_377>::verify(&vk, &public_inputs, &proof)
     }
+}
+
+#[wasm_bindgen]
+pub fn run_js(
+    client_data_json_base64: &str,
+    auth_data_base64: &str,
+    challenge_base64: &str,
+) -> Result<JsValue, JsValue> {
+    // Decode the base64 inputs
+    let client_data_json = BASE64_STANDARD
+        .decode(client_data_json_base64)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let auth_data = BASE64_STANDARD
+        .decode(auth_data_base64)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    let challenge = BASE64_URL_SAFE_NO_PAD
+        .decode(challenge_base64)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Step 1: Hash the `client_data_json` using SHA-256
+    let mut hasher = Sha256::new();
+    hasher.update(&client_data_json);
+    let client_data_json_hash = hasher.finalize();
+
+    // Step 2: Concatenate `auth_data` with the SHA-256 hash of `client_data_json`
+    let mut concatenated_data = auth_data.clone();
+    concatenated_data.extend_from_slice(&client_data_json_hash);
+
+    // Step 3: Hash the concatenated result again using SHA-256 to produce the final message
+    let mut hasher = Sha256::new();
+    hasher.update(concatenated_data);
+    let message = hasher.finalize().to_vec();
+
+    //Now we run the circuit
+    let (message, challenge, proof, vk) =
+        WebAuthZKP::run(client_data_json, auth_data, message, challenge)
+            .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Format the result into JsValue to return to JavaScript
+    let output = json!({
+        "message": BASE64_URL_SAFE_NO_PAD.encode(&message),
+        "challenge": BASE64_URL_SAFE_NO_PAD.encode(&challenge),
+        "proof": BASE64_URL_SAFE_NO_PAD.encode(&proof),
+        "vk": BASE64_URL_SAFE_NO_PAD.encode(&vk),
+    });
+
+    to_value(&output).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+#[wasm_bindgen]
+pub fn verify_js(
+    message_base64: &str,
+    challenge_base64: &str,
+    proof_base64: &str,
+    vk_base64: &str,
+) -> Result<bool, JsValue> {
+    let message = BASE64_URL_SAFE_NO_PAD
+        .decode(message_base64)
+        .map_err(|e| e.to_string())?;
+    let challenge = BASE64_URL_SAFE_NO_PAD
+        .decode(challenge_base64)
+        .map_err(|e| e.to_string())?;
+
+    let proof_serialized = BASE64_URL_SAFE_NO_PAD
+        .decode(proof_base64)
+        .map_err(|e| e.to_string())?;
+    let vk_serialized = BASE64_URL_SAFE_NO_PAD
+        .decode(vk_base64)
+        .map_err(|e| e.to_string())?;
+
+    let result =
+        WebAuthZKP::verify(message, challenge, proof_serialized, vk_serialized).map_err(|e| {
+            let error_message = format!("Error during verification: {:?}", e);
+            console::error_1(&error_message.clone().into());
+            JsValue::from_str(&error_message)
+        })?;
+
+    if result {
+        console::log_1(&"Verification succeeded!".into());
+    } else {
+        console::log_1(&"Verification failed :(".into());
+    }
+
+    Ok(result)
 }

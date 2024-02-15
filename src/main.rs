@@ -12,12 +12,12 @@ fn main() {
 
     // Example base64 encoded values
     //Private Inputs
-    let client_data_json_base64 = "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiUGFzVk5BYVJwOWdqaFczSEFCdUZPbUZmTW95c3FrZU81c3Z0cnY1eGczSSIsIm9yaWdpbiI6Imh0dHA6Ly9sb2NhbGhvc3Q6MzAwMCIsImNyb3NzT3JpZ2luIjpmYWxzZX0=";
+    let client_data_json_base64 = "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiTWdOZDVUZ1hJTm1BTDdpZzZSS2M5VDE2dExEQ0R1dnF4OVR3azkxTTNXQSIsIm9yaWdpbiI6Imh0dHA6Ly9sb2NhbGhvc3Q6MzAwMCIsImNyb3NzT3JpZ2luIjpmYWxzZX0=";
     let auth_data_base64 = "SZYN5YgOjGh0NBcPZHZgW4/krrmihjLHmVzzuoMdl2MFAAAAAA==";
-    let client_data_challenge_base64 = "PasVNAaRp9gjhW3HABuFOmFfMoysqkeO5svtrv5xg3I";
+    //let client_data_challenge_base64 = "PasVNAaRp9gjhW3HABuFOmFfMoysqkeO5svtrv5xg3I";
 
     //Public Inputs
-    let challenge_base64 = "PasVNAaRp9gjhW3HABuFOmFfMoysqkeO5svtrv5xg3I";
+    let challenge_base64 = "MgNd5TgXINmAL7ig6RKc9T16tLDCDuvqx9Twk91M3WA";
 
     let client_data_json = BASE64_STANDARD
         .decode(client_data_json_base64)
@@ -27,9 +27,9 @@ fn main() {
         .decode(auth_data_base64)
         .expect("Failed to decode base64 auth_data");
 
-    let client_data_challenge = BASE64_URL_SAFE_NO_PAD
-        .decode(client_data_challenge_base64)
-        .expect("Failed to decode base64 client_data_challenge");
+    // let client_data_challenge = BASE64_URL_SAFE_NO_PAD
+    //     .decode(client_data_challenge_base64)
+    //     .expect("Failed to decode base64 client_data_challenge");
 
     let challenge = BASE64_URL_SAFE_NO_PAD
         .decode(challenge_base64)
@@ -68,7 +68,6 @@ fn main() {
     let (message, challenge, proof, vk) = WebAuthZKP::run(
         client_data_json,
         auth_data,
-        client_data_challenge,
         message,
         challenge,
     )
