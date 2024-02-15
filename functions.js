@@ -14,10 +14,13 @@ function generateChallenge() {
 /*  ECDSA Signature Verification Function
     Based off of https://cryptobook.nakov.com/digital-signatures/ecdsa-sign-verify-messages#ecdsa-verify-signature
     messageHash is the data to be verified, hashed with SHA256 (to match pdf flow)
+    In ZKP, this will be generated client-side and sent to the server
     signatureBuffer is the signature to be verified as a buffer
     publicKeyBuffer is the public key to be used for verification as a buffer in COSE format */
 
 function verifyECDSASignature(messageHash, signatureBuffer, publicKeyBuffer) {
+    console.log('messageHash: ', messageHash);
+    console.log('signatureBuffer: ', signatureBuffer);
     // Decode the COSE public key to a form we can use (as an elliptic curve key)
     const publicKey = parseCOSEPublicKey(publicKeyBuffer);
     console.log('publicKey: ', publicKey);
@@ -74,6 +77,7 @@ function decodeSignature(signature) {
         );
     });
     const decodedSignature = ECDSASignature.decode(signature, 'der');
+    console.log('decodedSignature: ', decodedSignature);
     console.log('r: ', BigInt('0x' + (decodedSignature.r.toString(16))));
     console.log('s: ', BigInt('0x' + (decodedSignature.s.toString(16))));
     return decodedSignature;
