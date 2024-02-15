@@ -1,6 +1,6 @@
 body {
     font-family: 'Helvetica', Arial, sans-serif;
-    background-color: #1a1a1a;
+    background-color: #121212; /* Slightly darker background for enhanced dark mode */
     color: #f0f0f0;
     text-align: center;
     padding: 50px;
@@ -11,7 +11,7 @@ h1 {
 }
 
 div {
-    background-color: #333;
+    background-color: #484545;
     margin: auto;
     padding: 20px;
     border-radius: 8px;
