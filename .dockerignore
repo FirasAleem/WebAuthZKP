@@ -1,0 +1,5 @@
+Website/node_modules
+Website/node_wasm
+Website/public/web_wasm
+
+.gitignore

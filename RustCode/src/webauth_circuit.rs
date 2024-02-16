@@ -173,7 +173,7 @@ impl WebAuthZKP {
         let client_data_origin = parsed_json["origin"]
             .as_str()
             .ok_or(SynthesisError::AssignmentMissing)?;
-
+        // Get the type 
         let client_data_type = parsed_json["type"]
             .as_str()
             .ok_or(SynthesisError::AssignmentMissing)?;
@@ -336,6 +336,7 @@ pub fn verify_js(
 
     if result {
         console::log_1(&"Verification succeeded!".into());
+        console::log_1(&"Recompiled in the Docker container".into());
     } else {
         console::log_1(&"Verification failed :(".into());
     }
