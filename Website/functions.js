@@ -17,13 +17,26 @@ function generateChallenge() {
     In ZKP, this will be generated client-side and sent to the server
     signatureBuffer is the signature to be verified as a buffer
     publicKeyBuffer is the public key to be used for verification as a buffer in COSE format */
+function verifySignature(messageHash, signatureBuffer, publicKeyBuffer) {
+    console.log('Inside verifySignature function')
+    console.log('messageHash: ', messageHash);
+    const publicKeyInfo = parseCOSEPublicKey(publicKeyBuffer);
+    if (publicKeyInfo.type === 'ECDSA') {
+        return verifyECDSASignature(messageHash, signatureBuffer, publicKeyBuffer);
+    } else if (publicKeyInfo.type === 'RSA') {
+        return verifyRSASignature(messageHash, signatureBuffer, publicKeyBuffer);
+    } else {
+        throw new Error('Unsupported key type for verification');
+    }
+}
 
 function verifyECDSASignature(messageHash, signatureBuffer, publicKeyBuffer) {
     //console.log('messageHash: ', messageHash);
     //console.log('signatureBuffer: ', signatureBuffer);
     // Decode the COSE public key to a form we can use (as an elliptic curve key)
-    const publicKey = parseCOSEPublicKey(publicKeyBuffer);
-    //console.log('publicKey: ', publicKey);
+    const publicKeyFull = parseCOSEPublicKey(publicKeyBuffer);
+    const publicKey = publicKeyFull.key;
+    console.log('publicKey: ', publicKey);
 
     // Take the hash and turn it into a Big Number object
     const messageHashBN = new BN(messageHash, 16);
@@ -59,13 +72,54 @@ function verifyECDSASignature(messageHash, signatureBuffer, publicKeyBuffer) {
     // Compare r' with r
     return rPrime.eq(r);
 }
+function verifyRSASignature(messageHash, signatureBuffer, publicKeyCoseBuffer) {
+    // Assuming publicKey is an object with 'n' and 'e' as properties in hex string format
+    const publicKeyFull = parseCOSEPublicKey(publicKeyCoseBuffer);
 
-// Function to parse COSE key, this one returns the key in a format that can be used by the verifyECDSASignature function
+    // Convert 'n' and 'e' from hex string to BigInt
+    const nBigInt = BigInt('0x' + publicKeyFull.n);
+    const eBigInt = BigInt('0x' + publicKeyFull.e);
+
+    // Convert signature to BigInt
+    const signatureBigInt = BigInt('0x' + signatureBuffer.toString('hex'));
+
+    // RSA "decryption": (signature ^ e) % n
+    const decryptedBigInt = signatureBigInt ** eBigInt % nBigInt;
+
+    // Convert decrypted BigInt back to Buffer
+    let decryptedBuffer = Buffer.from(decryptedBigInt.toString(16), 'hex');
+
+    // Find the hash start after padding
+    const hashStartIndex = decryptedBuffer.indexOf(0x00, 1) + 1;
+    decryptedBuffer = decryptedBuffer.slice(hashStartIndex); // Extract hash
+
+    // Compare the extracted hash with the provided message hash
+    const messageHashBuffer = Buffer.from(messageHash, 'hex');
+    console.log('decryptedBuffer: ', decryptedBuffer);
+    console.log('messageHashBuffer: ', messageHashBuffer);
+    if (decryptedBuffer.equals(messageHashBuffer)) {
+        throw new Error("Signature verification failed");
+    }
+    console.log("Signature verified successfully");
+    return true;
+}
+
+// Function to parse COSE key, this one returns the key in a format that can be used by the verifySignature function
 function parseCOSEPublicKey(coseBuffer) {
     const coseKey = cbor.decodeFirstSync(coseBuffer);
-    const x = coseKey.get(-2); // -2 is the key for the x-coordinate
-    const y = coseKey.get(-3); // -3 is the key for the y-coordinate
-    return ec.keyFromPublic({ x: x.toString('hex'), y: y.toString('hex') }, 'hex');
+    const kty = coseKey.get(1); // Key Type
+
+    if (kty === 2) { // EC2 key (ECDSA)
+        const x = coseKey.get(-2); // X-coordinate
+        const y = coseKey.get(-3); // Y-coordinate
+        return { type: 'ECDSA', key: ec.keyFromPublic({ x: x.toString('hex'), y: y.toString('hex') }, 'hex') };
+    } else if (kty === 3) { // RSA
+        const n = coseKey.get(-1); // Modulus
+        const e = coseKey.get(-2); // Exponent
+        return { type: 'RSA', n: n.toString('hex'), e: e.toString('hex') };
+    } else {
+        throw new Error('Unsupported key type');
+    }
 }
 
 // Function to decode ECDSA signature into 'r' and 's' values
@@ -83,28 +137,6 @@ function decodeSignature(signature) {
     return decodedSignature;
 }
 
-//Comments from original way of doing it
-// const dataToBeVerified = Buffer.concat([authenticatorData, clientDataHash]);
-// const verifier = crypto.createVerify('SHA256');
-// verifier.update(dataToBeVerified); //TODO: do this manually
-
-// const isValid = verifier.verify(publicKey, signature); //verify signature belongs to key
-// //ALSO then verify that the created hash matches
-
-// console.log('r: ', BigInt('0x' + (decodedSignature.r.toString(16))));
-// console.log('s: ', BigInt('0x' + (decodedSignature.s.toString(16))));
-//replaced by decodeSignature function below
-
-/* 
-    Sidenote: What is verifier.verify actually doing?
-    Well, it does ECDSA (Elliptic Curve Digital Signature Algorithm) signature verirfication.
-    It does so by parsing the signature which is made up of 'r' and 's' values.
-    It then hashes the data to be verified using the same hash function used to hash the data before signing.
-    It then performs a mathematical operation to verify the signature, using r and s, and the public key.
-    If the signature is valid, it returns true, otherwise it returns false.
-    
-*/
-
 //This was the original function to output the key in a nicely formatted way
 function parseCOSEPublicKeyforOutput(coseBuffer) {
     // Parse the COSE key with a CBOR library
@@ -112,57 +144,80 @@ function parseCOSEPublicKeyforOutput(coseBuffer) {
 
     // Extract data from the COSE key
     const keyType = coseKey.get(1); // 1 is the key for 'kty' (key type)
-    const algorithm = coseKey.get(3); // 3 is the key for 'alg' (algorithm)
-    const curve = coseKey.get(-1); // -1 is the key for 'crv' (elliptic curve)
-    const x = coseKey.get(-2); // -2 is the key for the x-coordinate
-    const y = coseKey.get(-3); // -3 is the key for the y-coordinate
 
-    return {
+    let output = {
         keyType: keyType,
-        algorithm: algorithm,
-        curve: curve,
-        x: x.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''),
-        y: y.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+        algorithm: coseKey.get(3) // 3 is the key for 'alg' (algorithm)
     };
+    switch (keyType) {
+        case 2: // Key Type 2 indicates EC2 key (ECDSA)
+            output.curve = coseKey.get(-1); // -1 is the key for 'crv' (elliptic curve)
+            output.x = coseKey.get(-2).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+            output.y = coseKey.get(-3).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+            break;
+        case 3: // Key Type 3 indicates RSA
+            output.n = coseKey.get(-1).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''); // Modulus
+            output.e = coseKey.get(-2).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, ''); // Exponent
+            break;
+        default:
+            throw new Error('Unsupported COSE key type');
+    }
+    return output;
 }
-
 
 //Print out the public key in the PEM format
 function coseToPem(coseKey) {
-    // Extract key type, algorithm, x and y coordinates from COSE key
-    const kty = coseKey.get(1);
-    const alg = coseKey.get(3);
-    const crv = coseKey.get(-1);
-    const x = coseKey.get(-2);
-    const y = coseKey.get(-3);
+    const kty = coseKey.get(1); // Key Type
 
-    // Ensure all necessary fields are present
-    if (kty === undefined || alg === undefined || crv === undefined || x === undefined || y === undefined) {
-        throw new Error('Missing required COSE key fields');
+    // For ECDSA keys
+    if (kty === 2) {
+        const crv = coseKey.get(-1); // Curve
+        const x = coseKey.get(-2); // X-coordinate
+        const y = coseKey.get(-3); // Y-coordinate
+
+        // Ensure all necessary ECDSA fields are present
+        if (x === undefined || y === undefined || crv === undefined) {
+            throw new Error('Missing required COSE key fields for ECDSA');
+        }
+
+        // Construct ECDSA PEM key
+        return crypto.createPublicKey({
+            key: {
+                kty: 'EC',
+                crv: 'P-256',
+                x: x.toString('base64'),
+                y: y.toString('base64')
+            },
+            format: 'jwk'
+        }).export({ type: 'spki', format: 'pem' });
     }
+    // For RSA keys
+    else if (kty === 3) {
+        const n = coseKey.get(-1); // Modulus
+        const e = coseKey.get(-2); // Exponent
 
-    // Check if the key is EC2 (ECDSA)
-    if (kty !== 2) {
+        // Ensure all necessary RSA fields are present
+        if (n === undefined || e === undefined) {
+            throw new Error('Missing required COSE key fields for RSA');
+        }
+
+        // Construct RSA PEM key
+        return crypto.createPublicKey({
+            key: {
+                kty: 'RSA',
+                n: n.toString('base64'),
+                e: e.toString('base64')
+            },
+            format: 'jwk'
+        }).export({ type: 'spki', format: 'pem' });
+    } else {
         throw new Error('Unsupported key type');
     }
-
-    // Construct the PEM key
-    const publicKey = crypto.createPublicKey({
-        key: {
-            kty: 'EC',
-            crv: 'P-256',
-            x: x.toString('base64'),
-            y: y.toString('base64')
-        },
-        format: 'jwk'
-    });
-
-    return publicKey.export({ type: 'spki', format: 'pem' });
 }
 
 module.exports = {
     generateChallenge,
-    verifyECDSASignature,
+    verifySignature,
     parseCOSEPublicKeyforOutput,
     coseToPem
 }
