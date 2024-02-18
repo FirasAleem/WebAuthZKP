@@ -72,34 +72,39 @@ function verifyECDSASignature(messageHash, signatureBuffer, publicKeyBuffer) {
     // Compare r' with r
     return rPrime.eq(r);
 }
-function verifyRSASignature(messageHash, signatureBuffer, publicKeyCoseBuffer) {
-    // Assuming publicKey is an object with 'n' and 'e' as properties in hex string format
-    const publicKeyFull = parseCOSEPublicKey(publicKeyCoseBuffer);
 
+function verifyRSASignature(messageHash, signatureBuffer, publicKeyCoseBuffer) {
+    // Parse the public key from the COSE buffer
+    const publicKeyFull = parseCOSEPublicKey(publicKeyCoseBuffer);
+    
     // Convert 'n' and 'e' from hex string to BigInt
     const nBigInt = BigInt('0x' + publicKeyFull.n);
     const eBigInt = BigInt('0x' + publicKeyFull.e);
-
-    // Convert signature to BigInt
+    
+    // Convert signature to BigInt and perform RSA "decryption"
     const signatureBigInt = BigInt('0x' + signatureBuffer.toString('hex'));
 
-    // RSA "decryption": (signature ^ e) % n
+    //RSA signature verification: s = m^e mod n
     const decryptedBigInt = signatureBigInt ** eBigInt % nBigInt;
-
-    // Convert decrypted BigInt back to Buffer
-    let decryptedBuffer = Buffer.from(decryptedBigInt.toString(16), 'hex');
-
-    // Find the hash start after padding
-    const hashStartIndex = decryptedBuffer.indexOf(0x00, 1) + 1;
-    decryptedBuffer = decryptedBuffer.slice(hashStartIndex); // Extract hash
-
-    // Compare the extracted hash with the provided message hash
-    const messageHashBuffer = Buffer.from(messageHash, 'hex');
-    console.log('decryptedBuffer: ', decryptedBuffer);
-    console.log('messageHashBuffer: ', messageHashBuffer);
-    if (decryptedBuffer.equals(messageHashBuffer)) {
-        throw new Error("Signature verification failed");
+    
+    // Convert decrypted BigInt back to Buffer and then to hex string for manipulation
+    let decryptedBufferHex = Buffer.from(decryptedBigInt.toString(16), 'hex').toString('hex');
+    
+    // Remove leading '1' and 'F's used for padding and specific ASN.1 encoding sequence (RSA PKCS#1 v1.5 with SHA-256)
+    decryptedBufferHex = decryptedBufferHex.replace(/^1f+/, '').replace('003031300d060960864801650304020105000420', '');
+    
+    // Prepare the message hash buffer, ignoring the last character for comparison
+    const messageHashBuffer = Buffer.from(messageHash.slice(0, -1), 'hex');
+    
+    // Recreate buffer from modified hex string for comparison
+    let decryptedBuffer = Buffer.from(decryptedBufferHex, 'hex');
+    
+    // Compare the hashes
+    if (!decryptedBuffer.equals(messageHashBuffer)) {
+        console.log("Signature verification failed");
+        return false;
     }
+
     console.log("Signature verified successfully");
     return true;
 }
