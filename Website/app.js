@@ -373,7 +373,7 @@ app.post('/verify-login', async (req, res) => {
             const coseKeyBuffer = (Buffer.from(authenticator.public_key, 'base64'));
             console.log('COSE Key Buffer: ', coseKeyBuffer)
 
-            //This code is purely to get a PEM key from the COSE key 
+            //This code is purely to get a PEM key from the COSE key
             //console.log('COSE Key Parsed: ', parseCOSEPublicKey(coseKeyBuffer));
             const publicKey = coseToPem(cbor.decodeFirstSync(coseKeyBuffer));
             console.log('Public Key Pem: ', publicKey);
@@ -432,22 +432,15 @@ app.post('/verify-login-zkp', async (req, res) => {
 
             // Convert base64 encoded signature to buffer for function
             const signatureBuffer = Buffer.from(signature, 'base64');
-            // Convert base64 URL-safe encoded message to base64
-            const base64message = message.replace(/-/g, '+').replace(/_/g, '/');
-            // Convert base64 to raw binary data held in a string
-            const rawBinaryMessage = atob(base64message);
-            // Convert the raw binary message to a hexadecimal string so function to verify doesn’t have to change
-            let dataToBeVerifiedHash = '';
-            for (let i = 0; i < rawBinaryMessage.length; i++) {
-                const hex = rawBinaryMessage.charCodeAt(i).toString(16);
-                dataToBeVerifiedHash += (hex.length === 2 ? hex : '0' + hex);
-            }
+
+            // Convert URL-safe base64 encoded message directly to hex
+            const dataToBeVerifiedHash = Buffer.from(message.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('hex');
             console.log("Hex string to be passed in", dataToBeVerifiedHash);
 
             const coseKeyBuffer = (Buffer.from(authenticator.public_key, 'base64'));
             console.log('COSE Key Buffer: ', coseKeyBuffer)
 
-            //This code is purely to get a PEM key from the COSE key 
+            //This code is purely to get a PEM key from the COSE key
             //console.log('COSE Key Parsed: ', parseCOSEPublicKey(coseKeyBuffer));
             const publicKey = coseToPem(cbor.decodeFirstSync(coseKeyBuffer));
             console.log('Public Key Pem: ', publicKey);
