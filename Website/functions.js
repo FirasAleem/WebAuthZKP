@@ -11,12 +11,6 @@ function generateChallenge() {
     return base64String = crypto.randomBytes(32).toString('base64');
 }
 
-/*  ECDSA Signature Verification Function
-    Based off of https://cryptobook.nakov.com/digital-signatures/ecdsa-sign-verify-messages#ecdsa-verify-signature
-    messageHash is the data to be verified, hashed with SHA256 (to match pdf flow)
-    In ZKP, this will be generated client-side and sent to the server
-    signatureBuffer is the signature to be verified as a buffer
-    publicKeyBuffer is the public key to be used for verification as a buffer in COSE format */
 function verifySignature(messageHash, signatureBuffer, publicKeyBuffer) {
     console.log('Inside verifySignature function')
     console.log('messageHash: ', messageHash);
@@ -30,6 +24,12 @@ function verifySignature(messageHash, signatureBuffer, publicKeyBuffer) {
     }
 }
 
+/*  ECDSA Signature Verification Function
+    Based off of https://cryptobook.nakov.com/digital-signatures/ecdsa-sign-verify-messages#ecdsa-verify-signature
+    messageHash is the data to be verified, hashed with SHA256 (to match pdf flow)
+    (In ZKP, this will be generated client-side and sent to the server)
+    signatureBuffer is the signature to be verified as a buffer
+    publicKeyBuffer is the public key to be used for verification as a buffer in COSE format */
 function verifyECDSASignature(messageHash, signatureBuffer, publicKeyBuffer) {
     //console.log('messageHash: ', messageHash);
     //console.log('signatureBuffer: ', signatureBuffer);
@@ -73,32 +73,33 @@ function verifyECDSASignature(messageHash, signatureBuffer, publicKeyBuffer) {
     return rPrime.eq(r);
 }
 
+//RSA Signature Verification, specifically for RSA PKCS#1 v1.5 with SHA-256
 function verifyRSASignature(messageHash, signatureBuffer, publicKeyCoseBuffer) {
     // Parse the public key from the COSE buffer
     const publicKeyFull = parseCOSEPublicKey(publicKeyCoseBuffer);
-    
+
     // Convert 'n' and 'e' from hex string to BigInt
     const nBigInt = BigInt('0x' + publicKeyFull.n);
     const eBigInt = BigInt('0x' + publicKeyFull.e);
-    
+
     // Convert signature to BigInt and perform RSA "decryption"
     const signatureBigInt = BigInt('0x' + signatureBuffer.toString('hex'));
 
     //RSA signature verification: s = m^e mod n
-    const decryptedBigInt = signatureBigInt ** eBigInt % nBigInt;
-    
+    const decryptedBigInt = modPow(signatureBigInt, eBigInt, nBigInt);
+
     // Convert decrypted BigInt back to Buffer and then to hex string for manipulation
     let decryptedBufferHex = Buffer.from(decryptedBigInt.toString(16), 'hex').toString('hex');
-    
+
     // Remove leading '1' and 'F's used for padding and specific ASN.1 encoding sequence (RSA PKCS#1 v1.5 with SHA-256)
     decryptedBufferHex = decryptedBufferHex.replace(/^1f+/, '').replace('003031300d060960864801650304020105000420', '');
-    
+
     // Prepare the message hash buffer, ignoring the last character for comparison
     const messageHashBuffer = Buffer.from(messageHash.slice(0, -1), 'hex');
-    
+
     // Recreate buffer from modified hex string for comparison
     let decryptedBuffer = Buffer.from(decryptedBufferHex, 'hex');
-    
+
     // Compare the hashes
     if (!decryptedBuffer.equals(messageHashBuffer)) {
         console.log("Signature verification failed");
@@ -107,6 +108,28 @@ function verifyRSASignature(messageHash, signatureBuffer, publicKeyCoseBuffer) {
 
     console.log("Signature verified successfully");
     return true;
+}
+
+//Square-and-multiply algorithm for modular exponentiation to speed up RSA signature verification
+function modPow(base, exponent, modulus) {
+    base = BigInt(base);
+    exponent = BigInt(exponent);
+    modulus = BigInt(modulus);
+    let result = BigInt(1);
+
+    base = base % modulus;
+
+    while (exponent > 0) {
+        // If exponent is odd, multiply the base with result
+        if (exponent % 2n === 1n) {
+            result = (result * base) % modulus;
+        }
+
+        // Exponent is even now
+        exponent = exponent / 2n;
+        base = (base * base) % modulus;
+    }
+    return result;
 }
 
 // Function to parse COSE key, this one returns the key in a format that can be used by the verifySignature function
