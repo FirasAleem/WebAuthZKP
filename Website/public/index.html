@@ -7,14 +7,16 @@
 </head>
 
 <body>
-    <h1>WebAuthn ZKP</h1>
+    <h1>WebAuthn with ZKPs</h1>
     <div>
         <input type="text" id="username" placeholder="Enter a username" autocomplete="username">
         <button id="register">Register</button>
         <button id="login">Login</button>
         <button id="login-zkp" class="btn">Login using ZKP</button>
     </div>
-
+    <div id="success-banner" class="banner hidden"></div>
+    <div id="failure-banner" class="banner hidden"></div>
+    <div id="zkp-success-banner" class="banner hidden "></div>
     <script type="module" src="client.js"></script>
 </body>
 

@@ -43,6 +43,7 @@ button {
     transition: background-color 0.3s, transform 0.3s; 
     position: relative; 
     overflow: hidden; 
+    width: 80%;
 }
 
 /* Styling for login-zkp button to include color cycling and hover effects */
@@ -83,4 +84,43 @@ button {
     filter: blur(8px);
     opacity: 1;
     background-size: 400%; 
+}
+
+.banner {
+    margin: 10px auto;
+    padding: 15px;
+    border-radius: 10px; /* Rounded corners */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2); /* Subtle shadow */
+    transition: all 0.3s ease;
+    width: 80%; /* Relative width for responsiveness */
+    max-width: 312px; /* Maximum width */
+    text-align: center; /* Center the text */
+    position: relative; /* For absolute positioning of the close button */
+    font-size: 1em; /* Text size */
+    color: #333; /* Text color */
+}
+
+.hidden {
+    display: none;
+}
+
+/* Success Banner */
+#success-banner {
+    background-color: #22b946; /* Green for success */
+}
+
+/* Failure Banner */
+#failure-banner {
+    background-color: #dc3545; /* Red for error */
+}
+
+/* ZKP Success Banner */
+#zkp-success-banner {
+    background-color: #17a2b8; /* Cyan for special ZKP success message */
+}
+
+.banner p {
+    font-size: 1em;
+    color: #f0f0f0;
+    margin: 0;
 }

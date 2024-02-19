@@ -71,6 +71,12 @@ document.getElementById('register').addEventListener('click', async () => {
 
         const regResult = await regResponse.json();
         console.log('Registration result:', regResult);
+        if (regResult.status === 'Registration successful!') {
+            showMessage('Registration was successful! You can now login', 'success');
+        } else {
+            showMessage('Registration failed 😞, please try again', 'failure');
+        }
+        
 
 
     } catch (err) {
@@ -192,6 +198,11 @@ document.getElementById('login').addEventListener('click', async () => {
         const regResult = await regResponse.json();
         console.log('Authentication result:', regResult);
 
+        if (regResult.status === 'Login successful!') {
+            showMessage('Login was successful! You logged in using a Passkey!', 'success');
+        } else {
+            showMessage('Login failed 😞, please check the logs and try again', 'failure');
+        }
     } catch (err) {
         console.error('Login error:', err);
     }
@@ -282,7 +293,18 @@ document.getElementById('login-zkp').addEventListener('click', async () => {
         const regResult = await regResponse.json();
         console.log('Authentication result:', regResult);
 
+        if (regResult.status === 'Login successful!') {
+            showMessage('Login was successful! You logged in using a Zero Knowledge Proof!', 'zkp-success');
+        } else {
+            showMessage('Login failed 😞, please check the logs and try again', 'failure');
+        }
     } catch (err) {
         console.error('Login error:', err);
     }
 });
+
+function showMessage(message, type) {
+    const banner = document.getElementById(`${type}-banner`);
+    banner.textContent = message; // Set the text content to the message passed
+    banner.classList.remove('hidden');
+}

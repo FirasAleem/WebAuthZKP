@@ -223,7 +223,7 @@ app.post('/send-credential', async (req, res) => {
         });
     }
     console.log('Registration successful!');
-    res.json({ status: 'Registration successful' });
+    res.json({ status: 'Registration successful!' });
 });
 
 
@@ -395,7 +395,7 @@ app.post('/verify-login', async (req, res) => {
                 });
             } if (isValid) {
                 console.log('Login successful!');
-                res.json({ status: 'Login successful' });
+                res.json({ status: 'Login successful!' });
             } else {
                 console.error('Error: Signature is invalid');
                 return res.status(409).send('Signature is invalid');
@@ -450,7 +450,7 @@ app.post('/verify-login-zkp', async (req, res) => {
 
             if (isValid && proofVerified) {
                 console.log('Login successful!');
-                res.json({ status: 'Login successful' });
+                res.json({ status: 'Login successful!' });
             } else if (!isValid) {
                 console.error('Error: Signature is invalid');
                 return res.status(400).send('Signature is invalid');
