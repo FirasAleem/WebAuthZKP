@@ -81,24 +81,32 @@ function verifyRSASignature(messageHash, signatureBuffer, publicKeyCoseBuffer) {
     // Convert 'n' and 'e' from hex string to BigInt
     const nBigInt = BigInt('0x' + publicKeyFull.n);
     const eBigInt = BigInt('0x' + publicKeyFull.e);
+    console.log('nBigInt:', nBigInt);
+    console.log('eBigInt:', eBigInt);
 
     // Convert signature to BigInt and perform RSA "decryption"
     const signatureBigInt = BigInt('0x' + signatureBuffer.toString('hex'));
+    console.log('signatureBigInt: ', signatureBigInt);
 
     //RSA signature verification: s = m^e mod n
     const decryptedBigInt = modPow(signatureBigInt, eBigInt, nBigInt);
+    console.log('decryptedBigInt: ', decryptedBigInt);
 
     // Convert decrypted BigInt back to Buffer and then to hex string for manipulation
     let decryptedBufferHex = Buffer.from(decryptedBigInt.toString(16), 'hex').toString('hex');
+    console.log('decryptedBufferHex full:', decryptedBufferHex);
 
-    // Remove leading '1' and 'F's used for padding and specific ASN.1 encoding sequence (RSA PKCS#1 v1.5 with SHA-256)
+    // Remove leading '1' and 'f's used for padding and specific ASN.1 encoding sequence (RSA PKCS#1 v1.5 with SHA-256)
     decryptedBufferHex = decryptedBufferHex.replace(/^1f+/, '').replace('003031300d060960864801650304020105000420', '');
+    console.log('decryptedBufferHex after replacement:', decryptedBufferHex);
 
     // Prepare the message hash buffer, ignoring the last character for comparison
     const messageHashBuffer = Buffer.from(messageHash.slice(0, -1), 'hex');
+    console.log('messageHashBuffer:', messageHashBuffer);
 
     // Recreate buffer from modified hex string for comparison
     let decryptedBuffer = Buffer.from(decryptedBufferHex, 'hex');
+    console.log('decryptedBuffer:', decryptedBuffer);
 
     // Compare the hashes
     if (!decryptedBuffer.equals(messageHashBuffer)) {

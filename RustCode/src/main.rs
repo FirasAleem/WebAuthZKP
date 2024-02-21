@@ -12,11 +12,11 @@ fn main() {
 
     // Example base64 encoded values
     //Private Inputs
-    let client_data_json_base64 = "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoiTWdOZDVUZ1hJTm1BTDdpZzZSS2M5VDE2dExEQ0R1dnF4OVR3azkxTTNXQSIsIm9yaWdpbiI6Imh0dHA6Ly9sb2NhbGhvc3Q6MzAwMCIsImNyb3NzT3JpZ2luIjpmYWxzZX0=";
-    let auth_data_base64 = "SZYN5YgOjGh0NBcPZHZgW4/krrmihjLHmVzzuoMdl2MFAAAAAA==";
+    let client_data_json_base64 = "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicjJKeFRtWm5PMUk5WE15ZV9KSlRtSE1IVG84SnhRaFozTTRtNWd4Qm9GNCIsIm9yaWdpbiI6Imh0dHA6Ly9sb2NhbGhvc3Q6MzAwMCIsImNyb3NzT3JpZ2luIjpmYWxzZX0=";
+    let auth_data_base64 = "SZYN5YgOjGh0NBcPZHZgW4/krrmihjLHmVzzuoMdl2MdAAAAAA==";
 
     //Public Inputs
-    let challenge_base64 = "MgNd5TgXINmAL7ig6RKc9T16tLDCDuvqx9Twk91M3WA";
+    let challenge_base64 = "r2JxTmZnO1I9XMye_JJTmHMHTo8JxQhZ3M4m5gxBoF4";
 
     // Prompt for user input:
     // Prompt user for base64 encoded client data JSON

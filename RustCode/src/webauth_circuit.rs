@@ -90,6 +90,7 @@ impl ConstraintSynthesizer<Fr> for WebAuthCircuit {
             .map(|challenge| UInt8::new_input_vec(cs.clone(), challenge))
             .unwrap_or_else(|| Err(SynthesisError::AssignmentMissing))?;
 
+        //Add in steps to recontruct the client data JSON
         //This is step 1 to get our signature: we hash the JSON client data
         let client_data_hash = Sha256Gadget::digest(&client_data_var)?;
 
@@ -108,6 +109,7 @@ impl ConstraintSynthesizer<Fr> for WebAuthCircuit {
         computed_message_hash.0.enforce_equal(&message_var)?;
 
         // Enforce that the client_data_challenge is equal to the challenge
+        //we wouldn’t need this since we are reconstructing the client data with the public challenge
         client_data_challenge_var.enforce_equal(&challenge_var)?;
 
         let target_origin_bytes = URL.as_bytes();
@@ -259,8 +261,11 @@ impl WebAuthZKP {
 
 #[wasm_bindgen]
 pub fn run_js(
+    //Private Inputs 
     client_data_json_base64: &str,
     auth_data_base64: &str,
+
+    //Public Input
     challenge_base64: &str,
 ) -> Result<JsValue, JsValue> {
     // Decode the base64 inputs

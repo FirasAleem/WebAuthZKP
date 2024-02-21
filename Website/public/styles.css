@@ -43,7 +43,6 @@ button {
     transition: background-color 0.3s, transform 0.3s; 
     position: relative; 
     overflow: hidden; 
-    width: 80%;
 }
 
 /* Styling for login-zkp button to include color cycling and hover effects */

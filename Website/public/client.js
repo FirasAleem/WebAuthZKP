@@ -76,7 +76,7 @@ document.getElementById('register').addEventListener('click', async () => {
         } else {
             showMessage('Registration failed 😞, please try again', 'failure');
         }
-        
+
 
 
     } catch (err) {
@@ -258,7 +258,7 @@ document.getElementById('login-zkp').addEventListener('click', async () => {
         const assertion = await navigator.credentials.get(assertionOptions);
         console.log('Login assertion:', assertion);
         //Up until here, it is identical to the login function without the ZKP
-        
+
         await init();
         const clientDataJSON = JSON.parse(new TextDecoder().decode(assertion.response.clientDataJSON));
         const challenge = clientDataJSON.challenge;
@@ -304,6 +304,15 @@ document.getElementById('login-zkp').addEventListener('click', async () => {
 });
 
 function showMessage(message, type) {
+    // First, hide all banners
+    const banners = document.querySelectorAll('.banner');
+    banners.forEach(banner => {
+        if (!banner.classList.contains('hidden')) {
+            banner.classList.add('hidden');
+        }
+    });
+
+    // Then, show the banner with the message
     const banner = document.getElementById(`${type}-banner`);
     banner.textContent = message; // Set the text content to the message passed
     banner.classList.remove('hidden');
