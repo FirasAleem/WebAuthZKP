@@ -10,7 +10,7 @@ mod webauth_circuit;
 fn main() {
     println!("====== WebAuth ZKP Test Started ======");
 
-    // Example base64 encoded values
+    //Example base64 encoded values
     //Private Inputs
     let client_data_json_base64 = "eyJ0eXBlIjoid2ViYXV0aG4uZ2V0IiwiY2hhbGxlbmdlIjoicjJKeFRtWm5PMUk5WE15ZV9KSlRtSE1IVG84SnhRaFozTTRtNWd4Qm9GNCIsIm9yaWdpbiI6Imh0dHA6Ly9sb2NhbGhvc3Q6MzAwMCIsImNyb3NzT3JpZ2luIjpmYWxzZX0=";
     let auth_data_base64 = "SZYN5YgOjGh0NBcPZHZgW4/krrmihjLHmVzzuoMdl2MdAAAAAA==";
@@ -51,10 +51,7 @@ fn main() {
         .decode(auth_data_base64)
         .expect("Failed to decode base64 auth_data");
 
-    let challenge = BASE64_URL_SAFE_NO_PAD
-        .decode(challenge_base64)
-        .expect("Failed to decode base64 challenge");
-
+    let challenge = challenge_base64.as_bytes().to_vec();
     //Generate the message, this will be handled by the run_js method
     // Step 1: Hash the `client_data_json` using SHA-256
     let mut hasher = Sha256::new();

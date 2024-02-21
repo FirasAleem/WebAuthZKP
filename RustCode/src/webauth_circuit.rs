@@ -1,6 +1,5 @@
 use ark_bls12_377::{Bls12_377, Fr};
 use ark_crypto_primitives::crh::sha256::constraints::Sha256Gadget;
-//use ark_crypto_primitives::crh::{sha256::Sha256, CRHScheme};
 use ark_ff::ToConstraintField;
 use ark_groth16::{Groth16, Proof, VerifyingKey};
 use ark_r1cs_std::prelude::*;
@@ -11,14 +10,12 @@ use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_snark::{CircuitSpecificSetupSNARK, SNARK};
 use base64::prelude::*;
 use rand::thread_rng;
-use serde_json::{json, Value};
+use serde_json::json;
 use serde_wasm_bindgen::to_value;
 use sha2::{Digest, Sha256};
 use std::str;
 use wasm_bindgen::prelude::*;
 use web_sys::console;
-
-//use ark_r1cs_std::fields::fp::FpVar;
 
 // use std::any::type_name;
 
@@ -27,49 +24,23 @@ use web_sys::console;
 //     type_name::<T>()
 // }
 
-//Change this depending on URL of website
-static URL: &str = "http://localhost:3000";
-
-
 #[derive(Clone)]
 struct WebAuthCircuit {
     //Private inputs
-    client_data_json: Option<Vec<u8>>,
+    client_data_suffix: Option<Vec<u8>>,
     auth_data: Option<Vec<u8>>,
-    client_data_challenge: Option<Vec<u8>>,
-    client_data_origin: Option<Vec<u8>>,
-    client_data_type: Option<Vec<u8>>,
 
     //Public Inputs
     message: Option<Vec<u8>>,
     challenge: Option<Vec<u8>>,
 }
 
-
 impl ConstraintSynthesizer<Fr> for WebAuthCircuit {
     fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
-        let client_data_var = self
-            .client_data_json
-            .as_ref()
-            .map(|client_data_json| UInt8::new_witness_vec(cs.clone(), client_data_json))
-            .unwrap_or_else(|| Err(SynthesisError::AssignmentMissing))?;
-
-        let client_data_challenge_var = self
-            .client_data_challenge
+        let client_data_suffix_var = self
+            .client_data_suffix
             .as_ref()
             .map(|client_data_challenge| UInt8::new_witness_vec(cs.clone(), client_data_challenge))
-            .unwrap_or_else(|| Err(SynthesisError::AssignmentMissing))?;
-
-        let client_data_origin_var = self
-            .client_data_origin
-            .as_ref()
-            .map(|client_data_origin| UInt8::new_witness_vec(cs.clone(), client_data_origin))
-            .unwrap_or_else(|| Err(SynthesisError::AssignmentMissing))?;
-
-        let client_data_type_var = self
-            .client_data_type
-            .as_ref()
-            .map(|client_data_type| UInt8::new_witness_vec(cs.clone(), client_data_type))
             .unwrap_or_else(|| Err(SynthesisError::AssignmentMissing))?;
 
         let auth_data_var = self
@@ -90,7 +61,24 @@ impl ConstraintSynthesizer<Fr> for WebAuthCircuit {
             .map(|challenge| UInt8::new_input_vec(cs.clone(), challenge))
             .unwrap_or_else(|| Err(SynthesisError::AssignmentMissing))?;
 
-        //Add in steps to recontruct the client data JSON
+        let prefix_string = r#"{"type":"webauthn.get","#.as_bytes();
+        let prefix_string_var: Vec<UInt8<Fr>> = prefix_string
+            .iter()
+            .map(|byte| UInt8::constant(*byte))
+            .collect();
+
+        let challenge_string = r#""challenge":""#.as_bytes();
+        let challenge_string_var: Vec<UInt8<Fr>> = challenge_string
+            .iter()
+            .map(|byte| UInt8::constant(*byte))
+            .collect();
+
+        let mut client_data_var = Vec::new();
+        client_data_var.extend_from_slice(&prefix_string_var);
+        client_data_var.extend_from_slice(&challenge_string_var);
+        client_data_var.extend_from_slice(&challenge_var);
+        client_data_var.extend_from_slice(&client_data_suffix_var);
+
         //This is step 1 to get our signature: we hash the JSON client data
         let client_data_hash = Sha256Gadget::digest(&client_data_var)?;
 
@@ -107,25 +95,6 @@ impl ConstraintSynthesizer<Fr> for WebAuthCircuit {
 
         // Enforce that the calculated hash equals the provided hash
         computed_message_hash.0.enforce_equal(&message_var)?;
-
-        // Enforce that the client_data_challenge is equal to the challenge
-        //we wouldn’t need this since we are reconstructing the client data with the public challenge
-        client_data_challenge_var.enforce_equal(&challenge_var)?;
-
-        let target_origin_bytes = URL.as_bytes();
-        let target_origin_var: Vec<UInt8<Fr>> = target_origin_bytes.iter()
-            .map(|byte| UInt8::constant(*byte))
-            .collect();
-
-
-        client_data_origin_var.enforce_equal(&target_origin_var)?;
-
-        let target_type_bytes = "webauthn.get".as_bytes();
-        let target_type_var: Vec<UInt8<Fr>> = target_type_bytes.iter()
-            .map(|byte| UInt8::constant(*byte))
-            .collect();
-
-        client_data_type_var.enforce_equal(&target_type_var)?;
         Ok(())
     }
 }
@@ -151,44 +120,37 @@ impl WebAuthZKP {
         SynthesisError,
     > {
         let rng = &mut thread_rng();
-        //Get the challenge from the client_data_json
-        // Step 1: Decode client_data_json from bytes to a string
-        let client_data_json_str =
-            str::from_utf8(&client_data_json).map_err(|_| SynthesisError::AssignmentMissing)?;
 
-        // Step 2: Parse the JSON string to access the 'challenge' field
-        let parsed_json: Value = serde_json::from_str(client_data_json_str)
-            .map_err(|_| SynthesisError::AssignmentMissing)?;
+        //Extract the suffix from the client data JSON (this is everything after the end of the challenge value)
+        let mut suffix_bytes: Vec<u8> = Vec::new();
 
-        // Step 3: Get the challenge as base64
-        let client_data_challenge_base64 = parsed_json["challenge"]
-            .as_str()
-            .ok_or(SynthesisError::AssignmentMissing)?;
+        let target_bytes = r#"","origin":"#.as_bytes();
 
-        // Step 4: Decode the challenge from base64 to bytes
-        let client_data_challenge = BASE64_URL_SAFE_NO_PAD
-            .decode(client_data_challenge_base64)
-            .expect("Failed to decode base64 client_data_challenge");
+        let mut suffix_bytes_start_pos = None;
+        for (index, window) in client_data_json.windows(target_bytes.len()).enumerate() {
+            if window == target_bytes {
+                suffix_bytes_start_pos = Some(index);
+                break;
+            }
+        }
 
-        //Other checking:
-        // Get the origin
-        let client_data_origin = parsed_json["origin"]
-            .as_str()
-            .ok_or(SynthesisError::AssignmentMissing)?;
-        // Get the type 
-        let client_data_type = parsed_json["type"]
-            .as_str()
-            .ok_or(SynthesisError::AssignmentMissing)?;
+        // Process the found position
+        if let Some(pos) = suffix_bytes_start_pos {
+            // Include the quotation mark before the comma in your result
+            suffix_bytes.extend_from_slice(&client_data_json[pos..]);
+            // Convert bytes back to a string for display or further processing
 
-        println!("client_data_origin: {}", client_data_origin);
-        println!("client_data_type: {}", client_data_type);
+            match std::str::from_utf8(&suffix_bytes) {
+                Ok(suffix_str) => println!("Suffix: {}", suffix_str),
+                Err(e) => eprintln!("Failed to convert bytes to string: {}", e),
+            }
+        } else {
+            println!("Target sequence not found.");
+        }
 
         let circuit = WebAuthCircuit {
-            client_data_json: Some(client_data_json),
+            client_data_suffix: Some(suffix_bytes),
             auth_data: Some(auth_data),
-            client_data_challenge: Some(client_data_challenge),
-            client_data_origin: Some(client_data_origin.as_bytes().to_vec()),
-            client_data_type: Some(client_data_type.as_bytes().to_vec()),
             message: Some(message.clone()),
             challenge: Some(challenge.clone()),
         };
@@ -261,7 +223,7 @@ impl WebAuthZKP {
 
 #[wasm_bindgen]
 pub fn run_js(
-    //Private Inputs 
+    //Private Inputs
     client_data_json_base64: &str,
     auth_data_base64: &str,
 
@@ -277,9 +239,7 @@ pub fn run_js(
         .decode(auth_data_base64)
         .map_err(|e| JsValue::from_str(&e.to_string()))?;
 
-    let challenge = BASE64_URL_SAFE_NO_PAD
-        .decode(challenge_base64)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let challenge = challenge_base64.as_bytes().to_vec();
 
     // Step 1: Hash the `client_data_json` using SHA-256
     let mut hasher = Sha256::new();
@@ -341,7 +301,6 @@ pub fn verify_js(
 
     if result {
         console::log_1(&"Verification succeeded!".into());
-        console::log_1(&"Recompiled in the Docker container".into());
     } else {
         console::log_1(&"Verification failed :(".into());
     }
