@@ -36,7 +36,7 @@ function verifyECDSASignature(messageHash, signatureBuffer, publicKeyBuffer) {
     // Decode the COSE public key to a form we can use (as an elliptic curve key)
     const publicKeyFull = parseCOSEPublicKey(publicKeyBuffer);
     const publicKey = publicKeyFull.key;
-    console.log('publicKey: ', publicKey);
+    //console.log('publicKey: ', publicKey);
 
     // Take the hash and turn it into a Big Number object
     const messageHashBN = new BN(messageHash, 16);
@@ -81,16 +81,12 @@ function verifyRSASignature(messageHash, signatureBuffer, publicKeyCoseBuffer) {
     // Convert 'n' and 'e' from hex string to BigInt
     const nBigInt = BigInt('0x' + publicKeyFull.n);
     const eBigInt = BigInt('0x' + publicKeyFull.e);
-    console.log('nBigInt:', nBigInt);
-    console.log('eBigInt:', eBigInt);
 
     // Convert signature to BigInt and perform RSA "decryption"
     const signatureBigInt = BigInt('0x' + signatureBuffer.toString('hex'));
-    console.log('signatureBigInt: ', signatureBigInt);
 
     //RSA signature verification: s = m^e mod n
     const decryptedBigInt = modPow(signatureBigInt, eBigInt, nBigInt);
-    console.log('decryptedBigInt: ', decryptedBigInt);
 
     // Convert decrypted BigInt back to Buffer and then to hex string for manipulation
     let decryptedBufferHex = Buffer.from(decryptedBigInt.toString(16), 'hex').toString('hex');

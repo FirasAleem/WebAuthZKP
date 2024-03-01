@@ -281,10 +281,7 @@ pub fn verify_js(
     let message = BASE64_URL_SAFE_NO_PAD
         .decode(message_base64)
         .map_err(|e| e.to_string())?;
-    let challenge = BASE64_URL_SAFE_NO_PAD
-        .decode(challenge_base64)
-        .map_err(|e| e.to_string())?;
-
+    let challenge = challenge_base64.as_bytes().to_vec();
     let proof_serialized = BASE64_URL_SAFE_NO_PAD
         .decode(proof_base64)
         .map_err(|e| e.to_string())?;
