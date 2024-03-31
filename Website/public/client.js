@@ -263,6 +263,7 @@ document.getElementById('login-zkp').addEventListener('click', async () => {
         const clientDataJSON = JSON.parse(new TextDecoder().decode(assertion.response.clientDataJSON));
         const challenge = clientDataJSON.challenge;
         const startTime = performance.now();
+        console.log('Starting ZKP Proving')
         const resultMap = run_js(arrayBufferToBase64(assertion.response.clientDataJSON), arrayBufferToBase64(assertion.response.authenticatorData), challenge);
         const endTime = performance.now();
         console.log(`Execution time: ${endTime - startTime} milliseconds`);

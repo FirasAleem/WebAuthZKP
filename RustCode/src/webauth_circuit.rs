@@ -40,7 +40,7 @@ impl ConstraintSynthesizer<Fr> for WebAuthCircuit {
         let client_data_suffix_var = self
             .client_data_suffix
             .as_ref()
-            .map(|client_data_challenge| UInt8::new_witness_vec(cs.clone(), client_data_challenge))
+            .map(|client_data_suffix| UInt8::new_witness_vec(cs.clone(), client_data_suffix))
             .unwrap_or_else(|| Err(SynthesisError::AssignmentMissing))?;
 
         let auth_data_var = self
@@ -140,10 +140,10 @@ impl WebAuthZKP {
             suffix_bytes.extend_from_slice(&client_data_json[pos..]);
             // Convert bytes back to a string for display or further processing
 
-            match std::str::from_utf8(&suffix_bytes) {
-                Ok(suffix_str) => println!("Suffix: {}", suffix_str),
-                Err(e) => eprintln!("Failed to convert bytes to string: {}", e),
-            }
+            // match std::str::from_utf8(&suffix_bytes) {
+            // Ok(suffix_str) => println!("Suffix: {}", suffix_str),
+            // Err(e) => eprintln!("Failed to convert bytes to string: {}", e),
+            // }
         } else {
             println!("Target sequence not found.");
         }
@@ -201,20 +201,20 @@ impl WebAuthZKP {
         //We need to concat the public inputs into a single vector
         let mut public_inputs: Vec<Fr> = Vec::new();
         println!(
-            "Number of elements in public_inputs initially: {}",
-            public_inputs.len()
+        "Number of elements in public_inputs initially: {}",
+        public_inputs.len()
         );
         //Add the message to the public inputs vector
         public_inputs.extend(message_fe);
         println!(
-            "Number of elements in public_inputs after message: {}",
-            public_inputs.len()
+        "Number of elements in public_inputs after message: {}",
+        public_inputs.len()
         );
         //Add the challenge to the public inputs vector
         public_inputs.extend(challenge_fe);
         println!(
-            "Number of elements in public_inputs before passing to verify: {}",
-            public_inputs.len()
+        "Number of elements in public_inputs before passing to verify: {}",
+        public_inputs.len()
         );
         //Do the verification
         Groth16::<Bls12_377>::verify(&vk, &public_inputs, &proof)

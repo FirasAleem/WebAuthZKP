@@ -88,11 +88,11 @@ app.post('/send-credential', async (req, res) => {
 
     // Verify the challenge matches
     if (clientDataJSON.challenge !== challenge) {
-        console.error('Error: Type is not webauthn.create');
+        console.error('Error: Challenge is incorrect');
         return res.status(402).send('Challenge does not match');
     }
     //Verify the origin matches
-    if (clientDataJSON.origin !== url) { //change if hosting on website/different port
+    if (clientDataJSON.origin !== url) { //change if hosting on website/different port 
         console.error('Error: origin does not match');
         return res.status(403).send('Origin does not match');
     }
@@ -426,9 +426,11 @@ app.post('/verify-login-zkp', async (req, res) => {
                 return res.status(404).send('Authenticator not found');
             }
             console.log('Authenticator: ', authenticator);
+            console.time('VerificationTime');
 
             const proofVerified = wasmModule.verify_js(message, challenge, proof, vk);
             console.log('Proof is valid:', proofVerified);
+            console.timeEnd('VerificationTime');
 
             // Convert base64 encoded signature to buffer for function
             const signatureBuffer = Buffer.from(signature, 'base64');

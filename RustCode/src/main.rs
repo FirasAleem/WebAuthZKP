@@ -75,7 +75,7 @@ fn main() {
         "Time taken to setup and prove: {:?} seconds",
         start.elapsed()
     );
-    println!("Message: {:?}", message.to_ascii_lowercase());
+    //println!("Message: {:?}", message.to_ascii_lowercase());
 
     let verify = Instant::now();
 
@@ -86,9 +86,9 @@ fn main() {
     println!("Time taken to verify: {:?} seconds", verify.elapsed());
 
     if result {
-        println!("Verification succeeded");
+    println!("Verification succeeded");
     } else {
-        println!("Verification failed");
+    println!("Verification failed");
     }
 
     println!("====== WebAuth ZKP Test Finished ======");
